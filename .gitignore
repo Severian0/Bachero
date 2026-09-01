@@ -1,0 +1,29 @@
+# env
+.env
+.env.*
+!.env.example
+
+# node / next
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+
+# supabase cli
+supabase/.temp/
+supabase/.branches/
+
+# flutter
+sensor/build/
+sensor/.dart_tool/
+sensor/.flutter-plugins*
+sensor/.packages
+sensor/ios/Pods/
+sensor/android/.gradle/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/

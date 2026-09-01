@@ -1,0 +1,212 @@
+<!-- Bachero console mockup: markup extracted from bachero-console.html (Claude Design export).
+     Template syntax: {{ expr }} bindings, <sc-for>/<sc-if> control flow, values come from console.logic.js renderVals().
+     The canvas-level overrides that were applied on top of industry.css: -->
+<style>
+  :root {
+    --font-body: "Inter", system-ui, sans-serif;
+    --font-heading: "Inter", system-ui, sans-serif;
+    --font-heading-weight: 600;
+    --radius-sm: 5px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+  }
+  html, body { margin: 0; padding: 0; background: #f2f2f3; font-family: "Inter", system-ui, sans-serif; letter-spacing: -0.005em; }
+  * { box-sizing: border-box; }
+  a { color: var(--color-accent-700); text-decoration: none; }
+  a:hover { color: var(--color-accent-900); }
+  @keyframes bch-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .3 } }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: color-mix(in srgb, #1d1f20 16%, transparent); border-radius: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+
+
+<div style="height: 100vh; display: grid; grid-template-rows: 62px 1fr; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); overflow: hidden">
+
+  <header style="display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-6); background: var(--color-neutral-100); color: var(--color-text); border-bottom: 1px solid var(--color-divider)">
+    <div style="display: flex; align-items: center; gap: var(--space-4)">
+      <span style="display: block; width: 28px; height: 28px; border: 1.5px solid var(--color-accent); border-radius: var(--radius-md)"></span>
+      <div style="line-height: 1.25">
+        <div style="font-weight: 700; font-size: 16px; letter-spacing: .04em; text-transform: uppercase">Bachero</div>
+        <div style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 58%, transparent)">{{ authority }} — Highways Maintenance Directorate</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: var(--space-4); font-size: 12px; color: color-mix(in srgb, var(--color-text) 62%, transparent)">
+      <span style="display: flex; align-items: center; gap: var(--space-2); padding: 5px 12px; border-radius: var(--radius-lg); background: var(--color-accent-100); color: var(--color-accent-800)">
+        <i style="display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--color-accent); animation: bch-breathe 2.4s ease-in-out infinite"></i>
+        {{ liveLabel }}
+      </span>
+      <span style="font-variant-numeric: tabular-nums">{{ kmLabel }} km scanned today</span>
+      <span style="padding: 5px 12px; border: 1px solid var(--color-divider); border-radius: var(--radius-lg); font-size: 12px">{{ dateLabel }}</span>
+    </div>
+  </header>
+
+  <main style="display: grid; grid-template-columns: 1fr 404px; min-height: 0">
+
+    <section style="position: relative; overflow: hidden; border-right: 1px solid var(--color-divider); background: var(--color-neutral-200)" sc-camel-on-mouse-leave="{{ clearHover }}">
+
+      <svg sc-camel-view-box="0 0 100 100" sc-camel-preserve-aspect-ratio="none" style="position: absolute; inset: 0; width: 100%; height: 100%">
+        <rect x="0" y="0" width="100" height="100" style="fill: color-mix(in srgb, var(--color-neutral-200) 55%, var(--color-bg))"></rect>
+
+        <rect x="6" y="20" width="17" height="13" rx="1.4" style="fill: color-mix(in srgb, var(--color-accent-200) 55%, var(--color-bg))"></rect>
+        <rect x="56" y="72" width="22" height="16" rx="1.4" style="fill: color-mix(in srgb, var(--color-accent-200) 55%, var(--color-bg))"></rect>
+        <rect x="41" y="4" width="13" height="10" rx="1.4" style="fill: color-mix(in srgb, var(--color-accent-200) 40%, var(--color-bg))"></rect>
+
+        <path d="M0,78 C16,74 30,84 48,79 S76,69 100,73" fill="none" stroke-linecap="round" vector-effect="non-scaling-stroke" style="stroke: color-mix(in srgb, var(--color-accent-300) 70%, var(--color-bg)); stroke-width: 16px"></path>
+
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" style="stroke: color-mix(in srgb, var(--color-neutral-400) 55%, transparent); stroke-width: 5px">
+          <path d="M0,32 C22,29 38,36 62,31 S88,26 100,29" vector-effect="non-scaling-stroke"></path>
+          <path d="M0,66 C20,63 36,70 58,65 S86,61 100,64" vector-effect="non-scaling-stroke"></path>
+          <path d="M12,4 C14,26 9,48 14,68 S11,90 13,100" vector-effect="non-scaling-stroke"></path>
+          <path d="M56,10 C58,30 52,50 57,70 S54,90 56,100" vector-effect="non-scaling-stroke"></path>
+          <path d="M0,90 C24,86 48,94 72,89 S94,86 100,88" vector-effect="non-scaling-stroke"></path>
+        </g>
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" style="stroke: var(--color-neutral-100); stroke-width: 3.4px">
+          <path d="M0,32 C22,29 38,36 62,31 S88,26 100,29" vector-effect="non-scaling-stroke"></path>
+          <path d="M0,66 C20,63 36,70 58,65 S86,61 100,64" vector-effect="non-scaling-stroke"></path>
+          <path d="M12,4 C14,26 9,48 14,68 S11,90 13,100" vector-effect="non-scaling-stroke"></path>
+          <path d="M56,10 C58,30 52,50 57,70 S54,90 56,100" vector-effect="non-scaling-stroke"></path>
+          <path d="M0,90 C24,86 48,94 72,89 S94,86 100,88" vector-effect="non-scaling-stroke"></path>
+        </g>
+
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" style="stroke: color-mix(in srgb, var(--color-neutral-500) 55%, transparent); stroke-width: 11px">
+          <path d="M0,14 C20,17 40,10 60,15 S90,21 100,18" vector-effect="non-scaling-stroke"></path>
+          <path d="M0,52 C25,48 45,58 70,50 S92,44 100,46" vector-effect="non-scaling-stroke"></path>
+          <path d="M30,0 C32,20 27,40 34,60 S30,86 32,100" vector-effect="non-scaling-stroke"></path>
+          <path d="M86,0 C84,25 90,45 84,66 S88,88 86,100" vector-effect="non-scaling-stroke"></path>
+          <path d="M34,100 C50,78 62,60 78,44 S95,31 100,26" vector-effect="non-scaling-stroke"></path>
+        </g>
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" style="stroke: var(--color-neutral-100); stroke-width: 8px">
+          <path d="M0,14 C20,17 40,10 60,15 S90,21 100,18" vector-effect="non-scaling-stroke"></path>
+          <path d="M0,52 C25,48 45,58 70,50 S92,44 100,46" vector-effect="non-scaling-stroke"></path>
+          <path d="M30,0 C32,20 27,40 34,60 S30,86 32,100" vector-effect="non-scaling-stroke"></path>
+          <path d="M86,0 C84,25 90,45 84,66 S88,88 86,100" vector-effect="non-scaling-stroke"></path>
+          <path d="M34,100 C50,78 62,60 78,44 S95,31 100,26" vector-effect="non-scaling-stroke"></path>
+        </g>
+      </svg>
+
+      <sc-if value="{{ linked }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="position: absolute; top: 0; bottom: 0; width: 1px; left: {{ linked.left }}; background: color-mix(in srgb, var(--color-accent) 40%, transparent)"></div>
+          <div style="position: absolute; left: 0; right: 0; height: 1px; top: {{ linked.top }}; background: color-mix(in srgb, var(--color-accent) 40%, transparent)"></div>
+          <div style="position: absolute; top: 10px; left: {{ linked.left }}; transform: translateX(8px); padding: 3px 7px; border-radius: var(--radius-md); background: var(--color-bg); box-shadow: var(--shadow-sm); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-accent-800)">{{ linked.coord }}</div>
+        </div>
+      </sc-if>
+
+      <sc-for list="{{ trails }}" as="t" hint-placeholder-count="0">
+        <div style="position: absolute; left: {{ t.left }}; top: {{ t.top }}; width: 5px; height: 5px; border-radius: 50%; transform: translate(-50%, -50%); background: var(--color-accent); opacity: {{ t.opacity }}"></div>
+      </sc-for>
+
+      <sc-for list="{{ pins }}" as="p" hint-placeholder-count="14">
+        <div style="position: absolute; left: {{ p.left }}; top: {{ p.top }}; transform: translate(-50%, -50%); z-index: {{ p.z }}; padding: 7px; cursor: pointer" sc-camel-on-mouse-enter="{{ p.enter }}" sc-camel-on-click="{{ p.click }}">
+          <div style="display: flex; align-items: center; justify-content: center; width: {{ p.size }}; height: {{ p.size }}; border-radius: 5px; background: {{ p.fill }}; border: 1.5px solid {{ p.stroke }}; box-shadow: {{ p.glow }}; opacity: {{ p.opacity }}; transition: width 240ms cubic-bezier(.2,.6,.2,1), height 240ms cubic-bezier(.2,.6,.2,1), background 240ms cubic-bezier(.2,.6,.2,1), box-shadow 120ms linear">
+            <span style="font-family: var(--font-heading); font-size: 11px; color: var(--color-bg)">{{ p.stopLabel }}</span>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-for list="{{ vehicles }}" as="v" hint-placeholder-count="0">
+        <div style="position: absolute; left: {{ v.left }}; top: {{ v.top }}; transform: translate(-50%, -50%); transition: left 1200ms cubic-bezier(.2,.6,.2,1), top 1200ms cubic-bezier(.2,.6,.2,1); z-index: 40; display: flex; align-items: center; gap: var(--space-2)">
+          <div style="width: 11px; height: 11px; border-radius: 50%; background: var(--color-accent); border: 2px solid var(--color-bg); box-shadow: var(--shadow-sm)"></div>
+          <div style="white-space: nowrap; padding: 2px 7px; border-radius: var(--radius-md); background: var(--color-bg); box-shadow: var(--shadow-sm); font-size: 11px; color: var(--color-accent-800)">{{ v.label }}</div>
+        </div>
+      </sc-for>
+
+      <div style="position: absolute; z-index: 80; border: 1px solid var(--color-divider); left: var(--space-6); bottom: var(--space-6); padding: var(--space-4) var(--space-6); background: var(--color-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm)">
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 55%, transparent); margin-bottom: var(--space-3)">Key</div>
+        <div style="display: grid; gap: var(--space-3)">
+          <div style="display: flex; align-items: center; gap: var(--space-3); font-size: 12px">
+            <i style="width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid color-mix(in srgb, var(--color-text) 38%, transparent)"></i> Suspected — one vehicle
+          </div>
+          <div style="display: flex; align-items: center; gap: var(--space-3); font-size: 12px">
+            <i style="width: 17px; height: 17px; border-radius: 5px; background: var(--color-accent)"></i> Confirmed — corroborated
+          </div>
+          <div style="display: flex; align-items: center; gap: var(--space-3); font-size: 12px">
+            <i style="width: 17px; height: 17px; border-radius: 5px; background: var(--color-accent-800)"></i> Scheduled — on a route
+          </div>
+          <div style="display: flex; align-items: center; gap: var(--space-3); font-size: 12px">
+            <i style="width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--color-neutral-300)"></i> Repaired — closed today
+          </div>
+        </div>
+        <div style="margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-divider); font-size: 12px; color: color-mix(in srgb, var(--color-text) 55%, transparent)">Marker size shows severity</div>
+      </div>
+
+      <div style="position: absolute; z-index: 80; right: var(--space-6); bottom: var(--space-6); display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-bg); box-shadow: var(--shadow-sm); font-size: 11px; color: color-mix(in srgb, var(--color-text) 60%, transparent)">
+        <span style="width: 60px; height: 2px; border-radius: 1px; background: color-mix(in srgb, var(--color-text) 45%, transparent)"></span>
+        500 m
+      </div>
+    </section>
+
+    <aside style="display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto auto; min-height: 0; background: var(--color-bg)">
+
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--color-divider)">
+        <sc-for list="{{ stats }}" as="s" hint-placeholder-count="3">
+          <div style="padding: var(--space-4); border-right: 1px solid var(--color-divider)">
+            <div style="font-family: var(--font-heading); font-size: 32px; line-height: 1; font-variant-numeric: tabular-nums">{{ s.value }}</div>
+            <div style="margin-top: var(--space-2); font-size: 12px; line-height: 1.3; color: color-mix(in srgb, var(--color-text) 58%, transparent)">{{ s.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; gap: var(--space-2); padding: var(--space-4); border-bottom: 1px solid var(--color-divider)">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+          <button style="flex: 1; padding: 7px 0; font-family: var(--font-body); font-size: 12px; font-weight: 500; cursor: pointer; border-radius: var(--radius-lg); border: 1px solid {{ f.border }}; background: {{ f.bg }}; color: {{ f.color }}; transition: background 120ms linear" sc-camel-on-click="{{ f.click }}">{{ f.label }}</button>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-divider); font-size: 12px; color: color-mix(in srgb, var(--color-text) 58%, transparent)">
+        <span style="font-weight: 600; color: var(--color-text)">Repair queue</span>
+        <span>{{ queueCount }} · sorted by priority</span>
+      </div>
+
+      <div ref="{{ listRef }}" style="overflow-y: auto; min-height: 0">
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="9">
+          <div style="display: flex; align-items: center; gap: var(--space-3); height: {{ rowHeight }}; padding: 0 var(--space-4); border-bottom: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent); box-shadow: inset 3px 0 0 {{ r.mark }}; background: {{ r.bg }}; cursor: pointer; transition: background 120ms linear" sc-camel-on-mouse-enter="{{ r.enter }}" sc-camel-on-click="{{ r.click }}">
+            <div style="flex: 1; min-width: 0">
+              <div style="display: flex; align-items: baseline; gap: var(--space-2)">
+                <span style="font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ r.street }}</span>
+                <span style="font-size: 11px; color: color-mix(in srgb, var(--color-text) 45%, transparent); font-variant-numeric: tabular-nums">{{ r.ref }}</span>
+              </div>
+              <div style="margin-top: 2px; font-size: 12px; color: color-mix(in srgb, var(--color-text) 58%, transparent); font-variant-numeric: tabular-nums">{{ r.evidence }}</div>
+            </div>
+            <div style="display: flex; gap: 2px; align-items: center">
+              <sc-for list="{{ r.segs }}" as="g" hint-placeholder-count="4">
+                <i style="display: block; width: 9px; height: 5px; border-radius: 2px; background: {{ g.fill }}"></i>
+              </sc-for>
+            </div>
+            <div style="width: 42px; text-align: right; font-family: var(--font-heading); font-size: 18px; font-variant-numeric: tabular-nums; color: {{ r.priColor }}">{{ r.priority }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="min-height: 132px; padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-divider); background: color-mix(in srgb, var(--color-text) 3%, transparent)">
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 55%, transparent)">Evidence</div>
+        <sc-if value="{{ inspector }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top: var(--space-2)">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3)">
+              <span style="font-family: var(--font-heading); font-size: 20px; line-height: 1.15">{{ inspector.street }}</span>
+              <span class="tag tag-outline" style="border-radius: var(--radius-lg); font-size: 11px">{{ inspector.status }}</span>
+            </div>
+            <div style="margin-top: var(--space-1); font-size: 13px; line-height: 1.4; color: color-mix(in srgb, var(--color-text) 72%, transparent); font-variant-numeric: tabular-nums">{{ inspector.line1 }}</div>
+            <div style="font-size: 13px; line-height: 1.4; color: color-mix(in srgb, var(--color-text) 72%, transparent); font-variant-numeric: tabular-nums">{{ inspector.line2 }}</div>
+            <div style="margin-top: var(--space-1); font-size: 12px; line-height: 1.35; color: color-mix(in srgb, var(--color-text) 50%, transparent)">{{ inspector.hint }}</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noInspector }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top: var(--space-3); font-size: 13px; line-height: 1.5; color: color-mix(in srgb, var(--color-text) 50%, transparent); max-width: 34ch">Point at a queue row or a marker to link the two. Arrow keys move the link, Enter adds it to tomorrow's route.</div>
+        </sc-if>
+      </div>
+
+      <div style="height: 68px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: 0 var(--space-4); border-top: 1px solid var(--color-divider)">
+        <div style="font-size: 12px; line-height: 1.4; color: color-mix(in srgb, var(--color-text) 62%, transparent); font-variant-numeric: tabular-nums">
+          <div style="font-size: 13px; font-weight: 600; color: var(--color-text)">{{ selLabel }}</div>
+          <div>{{ selDetail }}</div>
+        </div>
+        <button class="btn btn-primary" style="border-radius: var(--radius-lg); font-family: var(--font-body); font-size: 13px; font-weight: 600; padding: 11px 18px; white-space: nowrap; cursor: pointer" disabled="{{ planDisabled }}" sc-camel-on-click="{{ clearSel }}">Plan route</button>
+      </div>
+
+    </aside>
+  </main>
+</div>
+
+</x-dc>
