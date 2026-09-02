@@ -198,6 +198,32 @@ describe("console store", () => {
     expect(s.getState().selected).toEqual(["a"]);
   });
 
+  it("a re-plan that yields no stops clears the standing plan the map is drawing", async () => {
+    const stop = { work_order_id: "w1", pothole_id: "a", stop_order: 1, eta: "2026-09-03T08:20:00.000Z", lng: -0.12, lat: 51.49, severity: 0.5, photo_url: null };
+    const path = { type: "LineString" as const, coordinates: [] };
+    const planRoute = vi.fn(async () => ({ route_plan_id: "r1", stops: [stop], total_km: 1, total_minutes: 2, baseline_km: 3, path }));
+    const ds = fakeDs({ planRoute });
+    const s = createConsoleStore();
+    s.getState().setDataSource(ds);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().upsertPothole(base);
+    s.getState().toggleSelected("a");
+    await s.getState().planRoute();
+    expect(s.getState().planState).toBe("planned");
+    expect(s.getState().plan?.stops).toHaveLength(1);
+
+    // Removing the only stop re-plans over nothing. The route line and its
+    // numbered stops are drawn from `plan`, so the failure has to take it away.
+    planRoute.mockImplementation(async () => ({ route_plan_id: "r2", stops: [], total_km: 0, total_minutes: 0, baseline_km: 0, path }));
+    s.getState().toggleSelected("a");
+    await s.getState().planRoute();
+    expect(s.getState().planState).toBe("error");
+    expect(s.getState().planError).toBe(EMPTY_PLAN_ERROR);
+    expect(s.getState().plan).toBeNull();
+    expect(s.getState().planCrewId).toBeNull();
+    expect(s.getState().selected).toEqual(["a"]);
+  });
+
   it("planRoute failure stores one sentence and returns to idle", async () => {
     const ds = fakeDs({ planRoute: vi.fn(async () => { throw new Error("OSRM 429"); }) });
     const s = createConsoleStore();

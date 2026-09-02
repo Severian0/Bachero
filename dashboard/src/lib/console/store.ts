@@ -230,10 +230,13 @@ export function createConsoleStore() {
         set({ planState: "planning", planError: undefined });
         try {
           const plan = await ds.planRoute(req);
-          // An empty plan is a failure, not a route. The selection is left alone
-          // so the operator can adjust it rather than rebuild it.
+          // An empty plan is a failure, not a route. Any previous plan has to go
+          // with it: the map draws whatever `plan` holds, so leaving the old one
+          // standing would keep a route line and its numbered stops on screen for
+          // a route that no longer exists. The selection is left alone so the
+          // operator can adjust it rather than rebuild it.
           if (plan.stops.length === 0) {
-            set({ planState: "error", planError: EMPTY_PLAN_ERROR });
+            set({ planState: "error", planError: EMPTY_PLAN_ERROR, plan: null, planCrewId: null });
             return;
           }
           set({
