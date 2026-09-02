@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { MapLayerMouseEvent } from "react-map-gl/maplibre";
 import { useConsole } from "@/lib/console/store";
 import { rectPolygon } from "@/lib/console/area";
@@ -18,7 +18,7 @@ export function useAreaDrag() {
     start.current = [e.lngLat.lng, e.lngLat.lat];
     setDrawing(true);
     setDraft(null);
-    const onKey = (k: KeyboardEvent) => { if (k.key === "Escape") { start.current = null; setDrawing(false); setDraft(null); } };
+    const onKey = (k: KeyboardEvent) => { if (k.key === "Escape") { start.current = null; setDrawing(false); setDraft(null); onKeyRef.current = null; } };
     onKeyRef.current = onKey;
     window.addEventListener("keydown", onKey, { once: true });
   }, []);
@@ -39,6 +39,10 @@ export function useAreaDrag() {
     useConsole.getState().setPlannerOpen(true);
     if (useConsole.getState().planner.mode === "manual") useConsole.getState().setPlanner({ mode: "count" });
   }, [setArea]);
+
+  useEffect(() => {
+    return () => { if (onKeyRef.current) window.removeEventListener("keydown", onKeyRef.current); };
+  }, []);
 
   return { drawing, draft, handlers: { onMouseDown, onMouseMove, onMouseUp } };
 }

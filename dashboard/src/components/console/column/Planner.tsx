@@ -6,6 +6,12 @@ const MODES: { key: Mode; label: string }[] = [
   { key: "manual", label: "Pick these" }, { key: "count", label: "Best N" }, { key: "time", label: "Time budget" },
 ];
 
+/** Empty or invalid input commits the fallback instead of coercing to 0. */
+const num = (v: string, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
 export function Planner() {
   const planner = useConsole((s) => s.planner);
   const open = useConsole((s) => s.plannerOpen);
@@ -50,16 +56,16 @@ export function Planner() {
       <div className="grid grid-cols-2 gap-3">
         {planner.mode === "count" && (
           <label className="field"><span className="block text-[12px] mb-1 text-ink-72">Stops</span>
-            <input className="input tabular" type="number" min={1} max={50} value={planner.maxStops} onChange={(e) => setPlanner({ maxStops: Number(e.target.value) })} />
+            <input key={`stops-${planner.crewId ?? "none"}`} className="input tabular" type="number" min={1} max={50} defaultValue={planner.maxStops} onBlur={(e) => setPlanner({ maxStops: num(e.target.value, planner.maxStops) })} />
           </label>
         )}
         {planner.mode === "time" && (
           <label className="field"><span className="block text-[12px] mb-1 text-ink-72">Minutes</span>
-            <input className="input tabular" type="number" min={30} step={30} value={planner.timeBudgetMin} onChange={(e) => setPlanner({ timeBudgetMin: Number(e.target.value) })} />
+            <input key={`minutes-${planner.crewId ?? "none"}`} className="input tabular" type="number" min={30} step={30} defaultValue={planner.timeBudgetMin} onBlur={(e) => setPlanner({ timeBudgetMin: num(e.target.value, planner.timeBudgetMin) })} />
           </label>
         )}
         <label className="field"><span className="block text-[12px] mb-1 text-ink-72">Minutes per stop</span>
-          <input className="input tabular" type="number" min={5} step={5} value={planner.serviceMinPerStop} onChange={(e) => setPlanner({ serviceMinPerStop: Number(e.target.value) })} />
+          <input className="input tabular" type="number" min={5} step={5} defaultValue={planner.serviceMinPerStop} onBlur={(e) => setPlanner({ serviceMinPerStop: num(e.target.value, planner.serviceMinPerStop) })} />
         </label>
       </div>
       {planner.mode !== "manual" && (
