@@ -36,6 +36,11 @@ export interface ConsoleState {
   density: "comfortable" | "compact";
   /** The dispatch sheet, the one thing on this screen that interrupts. */
   sheetOpen: boolean;
+  /**
+   * Shift-drag on the map is drawing a plan area. The screen's own keys stand
+   * down while it is true, because Escape belongs to the drag.
+   */
+  drawing: boolean;
 
   planner: PlannerConfig;
   plannerOpen: boolean;
@@ -71,6 +76,7 @@ export interface ConsoleActions {
   cycleFilter(): void;
   setDensity(d: ConsoleState["density"]): void;
   setSheetOpen(open: boolean): void;
+  setDrawing(drawing: boolean): void;
 
   setPlanner(patch: Partial<PlannerConfig>): void;
   setPlannerOpen(open: boolean): void;
@@ -115,7 +121,7 @@ export function createConsoleStore() {
       potholes: {}, vehicles: {}, crews: [], kmToday: 0, detections: {},
       loadState: "loading",
       linkedId: null, linkSource: null, pinnedId: null, selected: [], filter: "all", density: "comfortable",
-      sheetOpen: false,
+      sheetOpen: false, drawing: false,
       planner: { crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20, area: null, planDate: tomorrowISO() },
       plannerOpen: false,
       planState: "idle", plan: null, dispatchState: "idle", dispatchedTo: 0,
@@ -198,6 +204,7 @@ export function createConsoleStore() {
       },
       setDensity(density) { set({ density }); },
       setSheetOpen(sheetOpen) { set({ sheetOpen }); },
+      setDrawing(drawing) { set({ drawing }); },
 
       setPlanner(patch) { set((s) => ({ planner: { ...s.planner, ...patch } })); },
       setPlannerOpen(plannerOpen) { set({ plannerOpen }); },

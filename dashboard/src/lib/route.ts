@@ -1,4 +1,4 @@
-import { haversineKm } from "./geo";
+import { haversineKm } from "@/lib/solver/haversine";
 import type { Pothole } from "./model";
 
 /**
@@ -34,7 +34,7 @@ export function planRoute(selected: Pothole[]): RoutePlan {
     let best = 0;
     let bestKm = Infinity;
     for (let i = 0; i < remaining.length; i += 1) {
-      const d = haversineKm(from, remaining[i]);
+      const d = haversineKm([from.lng, from.lat], [remaining[i].lng, remaining[i].lat]);
       if (d < bestKm) {
         bestKm = d;
         best = i;

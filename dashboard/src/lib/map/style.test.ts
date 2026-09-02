@@ -1,7 +1,31 @@
 import { describe, it, expect } from "vitest";
 import { buildMapStyle } from "./style";
+import { MAP_FALLBACK, readMapTokens, readToken } from "./tokens";
 
-const t = { bg: "#f2f2f3", text: "#1d1f20", accent: "#5980a6", accent800: "#2c455d", neutral200: "#e7e7ea" };
+const t = readMapTokens();
+
+describe("map tokens", () => {
+  it("names the GOV.UK tokens the console actually defines", () => {
+    expect(MAP_FALLBACK).toEqual({
+      canvas: "#f3f2f1",
+      ink: "#0b0c0c",
+      action: "#1d70b8",
+      committed: "#00703c",
+      ruleSoft: "#e4e2e0",
+    });
+  });
+
+  it("falls back to those hexes off the browser, where no custom property can be read", () => {
+    expect(readToken("--action", MAP_FALLBACK.action)).toBe("#1d70b8");
+    expect(t).toEqual({
+      ground: "#f3f2f1",
+      ink: "#0b0c0c",
+      action: "#1d70b8",
+      committed: "#00703c",
+      water: "#e4e2e0",
+    });
+  });
+});
 
 describe("buildMapStyle", () => {
   const s = buildMapStyle(t);
@@ -14,9 +38,11 @@ describe("buildMapStyle", () => {
   });
   it("paints ground and roads from tokens with the spec opacities", () => {
     const bg = s.layers[0] as { paint: { "background-color": string } };
-    expect(bg.paint["background-color"]).toBe("#f2f2f3");
+    expect(bg.paint["background-color"]).toBe("#f3f2f1");
+    const water = s.layers[1] as { paint: Record<string, unknown> };
+    expect(water.paint["fill-color"]).toBe("#e4e2e0");
     const minor = s.layers[2] as { paint: Record<string, unknown> };
-    expect(minor.paint["line-color"]).toBe("#1d1f20");
+    expect(minor.paint["line-color"]).toBe("#0b0c0c");
     expect(minor.paint["line-opacity"]).toBe(0.18);
     const major = s.layers[3] as { paint: Record<string, unknown> };
     expect(major.paint["line-opacity"]).toBe(0.28);

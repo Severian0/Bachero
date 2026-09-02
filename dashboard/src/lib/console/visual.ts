@@ -1,4 +1,4 @@
-import type { Pothole, PotholeStatus } from "./model";
+import type { PotholeStatus } from "@/lib/types";
 
 /**
  * Two lanes of meaning, and only two.
@@ -66,9 +66,13 @@ export const STATUS_VISUAL: Record<PotholeStatus, StatusVisual> = {
   },
 };
 
-/** Severity is the pin's size, honestly scaled: 14px to 26px across grades. */
-export function pinSize(severity: number): number {
-  return 14 + (Math.min(4, Math.max(1, severity)) - 1) * 4;
+/**
+ * Severity is the pin's size, honestly scaled: 14px to 26px across the four
+ * grades. Takes the grade, not the raw 0-1 severity: callers pass
+ * `severityGrade(p.severity)` from `./derive`.
+ */
+export function pinSize(grade: number): number {
+  return 14 + (Math.min(4, Math.max(1, grade)) - 1) * 4;
 }
 
 /**
@@ -82,13 +86,6 @@ export function severityFill(severity: number, filled: boolean): string {
 }
 
 export const SEVERITY_WORD = ["", "Minor", "Moderate", "Serious", "Severe"];
-
-/** State the measurement, then the inference. */
-export function evidenceLine(p: Pothole): string {
-  const v = `${p.vehicleCount} ${p.vehicleCount === 1 ? "vehicle" : "vehicles"}`;
-  const s = `${p.passCount} ${p.passCount === 1 ? "pass" : "passes"}`;
-  return `${v}, ${s}, last ${timeOf(p.lastSeenIso)}`;
-}
 
 /** HH:MM in the record's own offset. No locale, no timezone drift. */
 export function timeOf(iso: string): string {

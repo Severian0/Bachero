@@ -2,7 +2,7 @@
 
 import DetectionFrame from "./DetectionFrame";
 import { FIXTURE_DAY } from "@/lib/fixtures";
-import { SEVERITY_WORD, severityFill, STATUS_VISUAL, whenOf } from "@/lib/visual";
+import { SEVERITY_WORD, severityFill, STATUS_VISUAL, whenOf } from "@/lib/console/visual";
 import type { Pothole } from "@/lib/model";
 
 /** Uncertainty is stated once, here, and never repeated as a warning. */

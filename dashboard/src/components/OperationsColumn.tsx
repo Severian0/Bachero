@@ -2,8 +2,21 @@
 
 import { useEffect, useRef } from "react";
 import { MOCK_KM_SCANNED } from "@/lib/fixtures";
-import { evidenceLine, severityFill, STATUS_VISUAL } from "@/lib/visual";
+import { severityFill, STATUS_VISUAL } from "@/lib/console/visual";
 import type { FilterKey, Pothole } from "@/lib/model";
+
+/**
+ * State the measurement, then the inference.
+ *
+ * Local to this column while it still takes the record shape from
+ * `lib/model`; Task 3 moves it onto `derive.evidenceLine`, which says the
+ * same thing about our own `Pothole`.
+ */
+function evidenceLine(p: Pothole): string {
+  const v = `${p.vehicleCount} ${p.vehicleCount === 1 ? "vehicle" : "vehicles"}`;
+  const s = `${p.passCount} ${p.passCount === 1 ? "pass" : "passes"}`;
+  return `${v}, ${s}, last ${p.lastSeenIso.slice(11, 16)}`;
+}
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },

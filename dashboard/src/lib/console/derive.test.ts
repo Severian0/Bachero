@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  priority, pinStyle, rowStyle, severitySegments, severityGrade, evidenceLine, inspectorLines,
+  priority, rowStyle, severitySegments, severityGrade, evidenceLine, inspectorLines,
   matchesFilter, visibleRows, stats, isSelectable, FILTER_CYCLE,
 } from "./derive";
 import type { Pothole } from "@/lib/data/types";
@@ -20,32 +20,6 @@ describe("priority", () => {
     expect(priority(base, now)).toBeCloseTo(1.0986, 3);
     expect(priority(p({ distinct_vehicles: 1, first_detected_at: now.toISOString() }), now)).toBeCloseTo(0.5 * Math.log(2), 6);
     expect(priority(p({ severity: 0 }), now)).toBe(0);
-  });
-});
-
-describe("pinStyle", () => {
-  it("suspected is hollow, confirmed solid accent, scheduled accent-800 with stop number", () => {
-    expect(pinStyle(p({ status: "suspected" }), { linked: false, selected: false })).toMatchObject({
-      fill: "var(--color-bg)", stroke: "var(--ink-38)", opacity: 1, stopLabel: "", hidden: false });
-    expect(pinStyle(base, { linked: false, selected: false })).toMatchObject({ fill: "var(--color-accent)", stroke: "var(--color-accent)" });
-    expect(pinStyle(p({ status: "scheduled", stop_order: 3 }), { linked: false, selected: false })).toMatchObject({
-      fill: "var(--color-accent-800)", stopLabel: "3" });
-  });
-  it("repaired fades, false_positive hides", () => {
-    expect(pinStyle(p({ status: "repaired" }), { linked: false, selected: false })).toMatchObject({ opacity: 0.55, stroke: "var(--color-neutral-300)" });
-    expect(pinStyle(p({ status: "false_positive" }), { linked: false, selected: false }).hidden).toBe(true);
-  });
-  it("size is 12 + severity×11, +5 when linked or selected; glow and z follow", () => {
-    const rest = pinStyle(p({ severity: 1 }), { linked: false, selected: false });
-    expect(rest.size).toBe(23);
-    expect(rest.z).toBe(20);
-    const sel = pinStyle(p({ severity: 0 }), { linked: false, selected: true });
-    expect(sel.size).toBe(17);
-    expect(sel.glow).toBe("0 0 0 4px var(--color-accent-200)");
-    expect(sel.z).toBe(50);
-    const linked = pinStyle(base, { linked: true, selected: true });
-    expect(linked.glow).toBe("0 0 0 5px color-mix(in srgb, var(--color-accent) 24%, transparent)");
-    expect(linked.z).toBe(60);
   });
 });
 

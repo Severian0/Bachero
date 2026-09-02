@@ -4,12 +4,20 @@ import type { MapLayerMouseEvent } from "react-map-gl/maplibre";
 import { useConsole } from "@/lib/console/store";
 import { rectPolygon } from "@/lib/console/area";
 
-/** Shift + drag draws a rectangle; the polygon lands in planner.area on mouseup. Esc cancels. */
+/**
+ * Shift + drag draws a rectangle; the polygon lands in planner.area on mouseup.
+ * Esc cancels.
+ *
+ * `drawing` lives in the store rather than here, because the screen's own
+ * keyboard listener has to stand down while a drag is in progress: Escape
+ * belongs to the drag, not to the record panel behind it.
+ */
 export function useAreaDrag() {
   const setArea = useConsole((s) => s.setArea);
+  const drawing = useConsole((s) => s.drawing);
+  const setDrawing = useConsole((s) => s.setDrawing);
   const start = useRef<[number, number] | null>(null);
   const onKeyRef = useRef<((k: KeyboardEvent) => void) | null>(null);
-  const [drawing, setDrawing] = useState(false);
   const [draft, setDraft] = useState<GeoJSON.Polygon | null>(null);
 
   const onMouseDown = useCallback((e: MapLayerMouseEvent) => {
@@ -28,7 +36,7 @@ export function useAreaDrag() {
     };
     onKeyRef.current = onKey;
     window.addEventListener("keydown", onKey);
-  }, []);
+  }, [setDrawing]);
 
   const onMouseMove = useCallback((e: MapLayerMouseEvent) => {
     if (!start.current) return;
@@ -45,7 +53,7 @@ export function useAreaDrag() {
     setArea(poly);
     useConsole.getState().setPlannerOpen(true);
     if (useConsole.getState().planner.mode === "manual") useConsole.getState().setPlanner({ mode: "count" });
-  }, [setArea]);
+  }, [setArea, setDrawing]);
 
   useEffect(() => {
     return () => { if (onKeyRef.current) window.removeEventListener("keydown", onKeyRef.current); };

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CREWS } from "@/lib/fixtures";
 import { OPERATOR } from "@/lib/console/branding";
 import { CREW_KM_PER_HOUR, MINUTES_ON_SITE } from "@/lib/route";
-import { SEVERITY_WORD, STATUS_VISUAL } from "@/lib/visual";
+import { SEVERITY_WORD, STATUS_VISUAL } from "@/lib/console/visual";
 import type { Crew, Pothole } from "@/lib/model";
 
 /**

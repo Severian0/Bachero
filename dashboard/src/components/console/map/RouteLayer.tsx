@@ -2,12 +2,12 @@
 import { useMemo } from "react";
 import { Layer, Marker, Source } from "react-map-gl/maplibre";
 import { useConsole } from "@/lib/console/store";
-import { readToken } from "@/lib/map/tokens";
+import { MAP_FALLBACK, readToken } from "@/lib/map/tokens";
 import { DEPOT } from "@/lib/data/synthetic";
 
 export function RouteLayer() {
   const plan = useConsole((s) => s.plan);
-  const accent = useMemo(() => readToken("--color-accent") || "#5980a6", []);
+  const action = useMemo(() => readToken("--action", MAP_FALLBACK.action), []);
   const data = useMemo<GeoJSON.FeatureCollection>(() => ({
     type: "FeatureCollection",
     features: plan ? [{ type: "Feature", properties: {}, geometry: plan.path }] : [],
@@ -16,14 +16,26 @@ export function RouteLayer() {
   return (
     <>
       <Source id="route" type="geojson" data={data}>
-        <Layer id="route-line" type="line" layout={{ "line-cap": "round", "line-join": "round" }} paint={{ "line-color": accent, "line-width": 2 }} />
+        <Layer id="route-line" type="line" layout={{ "line-cap": "round", "line-join": "round" }} paint={{ "line-color": action, "line-width": 2 }} />
       </Source>
       <Marker longitude={DEPOT[0]} latitude={DEPOT[1]} anchor="center" style={{ zIndex: 30 }}>
-        <div className="w-3 h-3 border-[1.5px] border-accent-800 bg-bg rounded-sm" aria-label="Depot" />
+        <div
+          aria-label="Depot"
+          style={{ width: 12, height: 12, borderRadius: "var(--r-sm)", border: "1.5px solid var(--rail)", background: "var(--surface)" }}
+        />
       </Marker>
       {plan.stops.map((s) => (
         <Marker key={s.work_order_id} longitude={s.lng} latitude={s.lat} anchor="center" style={{ zIndex: 45 }}>
-          <div className="w-4 h-4 rounded-sm bg-accent-800 flex items-center justify-center font-heading text-[10px] text-bg pointer-events-none">{s.stop_order}</div>
+          <div
+            className="data"
+            style={{
+              width: 16, height: 16, borderRadius: "var(--r-sm)", background: "var(--committed)",
+              display: "grid", placeItems: "center", fontSize: 10, fontWeight: 700, lineHeight: 1,
+              color: "var(--rail-ink)", pointerEvents: "none",
+            }}
+          >
+            {s.stop_order}
+          </div>
         </Marker>
       ))}
     </>

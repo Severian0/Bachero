@@ -12,6 +12,7 @@ export const STATUS_LABEL: Record<PotholeStatus, string> = {
   suspected: "Suspected", confirmed: "Confirmed", scheduled: "Scheduled", repaired: "Repaired", false_positive: "Dismissed",
 };
 
+/** Flags a queue row reads from the store. Pins take theirs from `./visual`. */
 type Flags = { linked: boolean; selected: boolean };
 
 /** Mirrors potholes_map.priority: severity × ln(1 + vehicles) × (1 + age in 30-day months). */
@@ -20,27 +21,6 @@ export function priority(
 ): number {
   const ageMonths = (now.getTime() - new Date(p.first_detected_at).getTime()) / 86_400_000 / 30;
   return p.severity * Math.log(1 + p.distinct_vehicles) * (1 + ageMonths);
-}
-
-export interface PinStyle {
-  size: number; fill: string; stroke: string; glow: string; opacity: number; z: number; stopLabel: string; hidden: boolean;
-}
-
-export function pinStyle(p: Pothole, { linked, selected }: Flags): PinStyle {
-  let fill = "var(--color-bg)", stroke = "var(--ink-38)", opacity = 1;
-  if (p.status === "confirmed") { fill = "var(--color-accent)"; stroke = "var(--color-accent)"; }
-  if (p.status === "scheduled") { fill = "var(--color-accent-800)"; stroke = "var(--color-accent-800)"; }
-  if (p.status === "repaired") { stroke = "var(--color-neutral-300)"; opacity = 0.55; }
-  const size = Math.round(12 + p.severity * 11) + (linked || selected ? 5 : 0);
-  let glow = "var(--shadow-sm)";
-  if (selected) glow = "0 0 0 4px var(--color-accent-200)";
-  if (linked) glow = "0 0 0 5px color-mix(in srgb, var(--color-accent) 24%, transparent)";
-  return {
-    size, fill, stroke, glow, opacity,
-    z: linked ? 60 : selected ? 50 : 20,
-    stopLabel: p.status === "scheduled" && p.stop_order != null ? String(p.stop_order) : "",
-    hidden: p.status === "false_positive",
-  };
 }
 
 export interface RowStyle { mark: string; bg: string; priColor: string }

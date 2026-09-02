@@ -7,7 +7,7 @@ import OperationsColumn from "./OperationsColumn";
 import RecordPanel from "./RecordPanel";
 import DispatchSheet from "./DispatchSheet";
 import { planRoute } from "@/lib/route";
-import { toRecord, toVehicleRecord } from "@/lib/model";
+import { toRecord } from "@/lib/model";
 import type { FilterKey } from "@/lib/model";
 import { useConsole } from "@/lib/console/store";
 import { handleKey } from "@/lib/console/keyboard";
@@ -25,12 +25,12 @@ import { createDataSource, isSupabaseConfigured } from "@/lib/data";
  */
 export default function Console() {
   const potholes = useConsole((s) => s.potholes);
-  const vehicles = useConsole((s) => s.vehicles);
   const filter = useConsole((s) => s.filter);
   const linkedId = useConsole((s) => s.linkedId);
   const pinnedId = useConsole((s) => s.pinnedId);
   const selected = useConsole((s) => s.selected);
   const sheetOpen = useConsole((s) => s.sheetOpen);
+  const drawing = useConsole((s) => s.drawing);
   const pendingDismiss = useConsole((s) => s.pendingDismiss);
   const loadState = useConsole((s) => s.loadState);
 
@@ -53,8 +53,6 @@ export default function Console() {
   const all = useMemo(() => Object.values(potholes), [potholes]);
   const queue = useMemo(() => visibleRows(all, filter), [all, filter]);
   const rows = useMemo(() => queue.map(toRecord), [queue]);
-  const visible = useMemo(() => visibleRows(all, "all").map(toRecord), [all]);
-  const vehicleRecords = useMemo(() => Object.values(vehicles).map(toVehicleRecord), [vehicles]);
 
   const counts = useMemo<Record<FilterKey, number>>(() => {
     const s = stats(all);
@@ -66,10 +64,6 @@ export default function Console() {
     };
   }, [all]);
 
-  // The map and the list are one instrument, so they answer to the same
-  // filter. Records outside it stay on the map, stepped back rather than
-  // removed, so the operator keeps their bearings.
-  const inFilter = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
   const routeIds = useMemo(() => new Set(selected), [selected]);
 
   const opened = useMemo(() => {
@@ -82,7 +76,6 @@ export default function Console() {
     [selected, potholes],
   );
 
-  const linkFromMap = useCallback((id: string | null) => (id ? link(id, "map") : unlink()), [link, unlink]);
   const linkFromRow = useCallback((id: string | null) => (id ? link(id, "row") : unlink()), [link, unlink]);
 
   // Dispatch is not yet wired to the work-order service, so sending closes the
@@ -94,13 +87,14 @@ export default function Console() {
 
   // Keyboard is first class. The linked row and the linked pin are the same
   // idea as focus, so the arrow keys move both at once. The sheet is modal and
-  // runs its own keys, so the screen stands down while it is open.
+  // runs its own keys, and a shift-drag on the map owns Escape, so the screen
+  // stands down while either is in progress.
   useEffect(() => {
-    if (sheetOpen) return;
+    if (sheetOpen || drawing) return;
     const onKey = (e: KeyboardEvent) => { handleKey(e, useConsole.getState(), queue); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [queue, sheetOpen]);
+  }, [queue, sheetOpen, drawing]);
 
   // The live data source: Supabase where it is configured, the synthetic fleet
   // otherwise. Mounted once, and the subscription is torn down with the screen.
@@ -138,16 +132,7 @@ export default function Console() {
       <Header live={isSupabaseConfigured() && loadState === "ready"} />
 
       <main style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 396px", minHeight: 0 }}>
-        <PotholeMap
-          potholes={visible}
-          inFilter={inFilter}
-          vehicles={vehicleRecords}
-          linkedId={linkedId}
-          openId={pinnedId}
-          routeIds={routeIds}
-          onLink={linkFromMap}
-          onOpen={pin}
-        />
+        <PotholeMap />
 
         <aside style={{ display: "grid", minHeight: 0, borderLeft: "1px solid var(--rule)", background: "var(--surface)" }}>
           {opened ? (
