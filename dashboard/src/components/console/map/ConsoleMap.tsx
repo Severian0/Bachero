@@ -1,11 +1,13 @@
 "use client";
-import { createContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Map from "react-map-gl/maplibre";
-import type { MapLayerMouseEvent } from "react-map-gl/maplibre";
+import type { MapLayerMouseEvent, MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { buildMapStyle } from "@/lib/map/style";
 import { readMapTokens } from "@/lib/map/tokens";
+import { isSupabaseConfigured } from "@/lib/data";
 import { DEPOT } from "@/lib/data/synthetic";
+import { useConsole } from "@/lib/console/store";
 import { Graticule } from "./Graticule";
 import { MapKey } from "./MapKey";
 import { ScaleBar } from "./ScaleBar";
@@ -20,10 +22,23 @@ export function ConsoleMap({ children, dragPan = true, cursor, onMapMouseLeave, 
   const style = useMemo(() => buildMapStyle(readMapTokens()), []);
   const [tick, setTick] = useState(0);
   const [tilesFailed, setTilesFailed] = useState(false);
+  const mapRef = useRef<MapRef>(null);
+  const loadState = useConsole((s) => s.loadState);
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (fitted.current || loadState !== "ready" || !isSupabaseConfigured() || !mapRef.current) return;
+    const pts = Object.values(useConsole.getState().potholes).filter((p) => p.status !== "false_positive").map((p) => [p.lng, p.lat] as [number, number]);
+    if (!pts.length) return;
+    pts.push(DEPOT);
+    const lngs = pts.map((p) => p[0]), lats = pts.map((p) => p[1]);
+    mapRef.current.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { padding: 40, maxZoom: 15, duration: 0 });
+    fitted.current = true;
+  }, [loadState]);
 
   return (
     <section className="relative overflow-hidden border-r border-divider bg-neutral-200" onMouseLeave={onMapMouseLeave}>
       <Map
+        ref={mapRef}
         initialViewState={{ longitude: DEPOT[0], latitude: DEPOT[1], zoom: 14.5 }}
         mapStyle={style}
         style={{ position: "absolute", inset: 0 }}

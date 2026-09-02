@@ -19,10 +19,11 @@ Bachero: council fleet vehicles carry phones that detect potholes; Supabase clus
 Dashboard (run from `dashboard/`):
 
 ```sh
-npm run dev      # http://localhost:3000
+npm run dev        # http://localhost:3000
 npm run build
-npm run lint     # eslint (flat config)
-npx tsc --noEmit # typecheck; there is no test runner yet
+npm run lint        # eslint (flat config)
+npm run typecheck  # tsc --noEmit
+npm test           # vitest run
 ```
 
 Database:
@@ -66,3 +67,5 @@ Spec: `docs/design/DESIGN.md`. Tokens: `dashboard/src/app/globals.css`, exposed 
 - Crew page: `dashboard/src/app/route/[id]/page.tsx`. Mobile-first, no auth, PATCHes `work_orders` only.
 - Realtime: subscribe to `public.potholes` (all events) and `public.vehicle_positions` (INSERT). Payloads carry raw geography, so on a pothole change re-fetch that row from `potholes_map`.
 - Security is intentionally absent (`demo_all` RLS policies, public storage bucket). Don't spend time hardening; do keep `authority_id` on anything new so tenancy is a policy change later.
+- Console screen (map + operations column): `dashboard/src/components/console/` with pure logic in `dashboard/src/lib/console/` (store, derivations, keyboard, tween), the shared solver heuristic in `dashboard/src/lib/solver/`, and the data layer in `dashboard/src/lib/data/` (synthetic by default; Supabase when `NEXT_PUBLIC_SUPABASE_URL` is set). Spec: `docs/superpowers/specs/2026-09-02-console-map-design.md`.
+- The `/api/plan-route` handler should call `solve()` from `dashboard/src/lib/solver/heuristic.ts` with the OSRM matrix (depot at index 0); the synthetic data source already does this with a haversine matrix.

@@ -47,7 +47,9 @@ npm install
 npm run dev                    # http://localhost:3000
 ```
 
-Other commands: `npm run build`, `npm run lint`, `npx tsc --noEmit`.
+With no `.env.local`, the console runs on synthetic data instead of Supabase.
+
+Other commands: `npm run build`, `npm run lint`, `npx tsc --noEmit`, `npm test`.
 
 ### 3. Sensor app
 
