@@ -6,21 +6,23 @@ import { QueueList } from "./QueueList";
 import { Inspector } from "./Inspector";
 import { DetailPanel } from "./DetailPanel";
 import { Planner } from "./Planner";
+import { RouteSummary } from "./RouteSummary";
 import { UndoToast } from "./UndoToast";
 import { Footer } from "./Footer";
 
 export function Column() {
   const pinnedId = useConsole((s) => s.pinnedId);
+  const planned = useConsole((s) => s.planState === "planned");
   return (
     // 8 tracks: stats, chips, then QueueList's own header + list (2 children), the
-    // inspector-or-detail slot, Planner (0 or 1 children — the spare `auto` track
-    // collapses when it renders null), UndoToast (same), and the footer.
+    // inspector-or-detail slot, Planner/RouteSummary (0 or 1 children — the spare
+    // `auto` track collapses when it renders null), UndoToast (same), and the footer.
     <aside className="grid min-h-0 bg-bg" style={{ gridTemplateRows: "auto auto auto minmax(0,1fr) auto auto auto auto" }}>
       <StatCells />
       <FilterChips />
       <QueueList />
       {pinnedId ? <DetailPanel id={pinnedId} /> : <Inspector />}
-      <Planner />
+      {planned ? <RouteSummary /> : <Planner />}
       <UndoToast />
       <Footer />
     </aside>
