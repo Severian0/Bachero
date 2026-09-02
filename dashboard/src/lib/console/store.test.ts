@@ -161,6 +161,27 @@ describe("console store", () => {
     expect(s.getState().plan?.route_plan_id).toBe("r1");
   });
 
+  it("planRoute records the crew the route was computed for, and later crew changes do not rewrite it", async () => {
+    const ds = fakeDs();
+    const s = createConsoleStore();
+    s.getState().setDataSource(ds);
+    s.getState().setCrews([
+      { id: "A", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 },
+      { id: "B", authority_id: "x", name: "Crew B", shift_minutes: 420, repairs_per_shift: 8 },
+    ]);
+    s.getState().upsertPothole(base);
+    s.getState().toggleSelected("a");
+    await s.getState().planRoute();
+    expect(s.getState().planCrewId).toBe("A");
+    // The operator picks a different crew afterwards; the plan on screen was
+    // still computed for A, so the confirmation must keep saying A.
+    s.getState().setPlanner({ crewId: "B" });
+    expect(s.getState().planner.crewId).toBe("B");
+    expect(s.getState().planCrewId).toBe("A");
+    s.getState().resetPlan();
+    expect(s.getState().planCrewId).toBeNull();
+  });
+
   it("planRoute failure stores one sentence and returns to idle", async () => {
     const ds = fakeDs({ planRoute: vi.fn(async () => { throw new Error("OSRM 429"); }) });
     const s = createConsoleStore();

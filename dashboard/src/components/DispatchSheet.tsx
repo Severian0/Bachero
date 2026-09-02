@@ -38,6 +38,7 @@ export default function DispatchSheet() {
   const planner = useConsole((s) => s.planner);
   const planState = useConsole((s) => s.planState);
   const plan = useConsole((s) => s.plan);
+  const planCrewId = useConsole((s) => s.planCrewId);
   const planError = useConsole((s) => s.planError);
   const dispatchState = useConsole((s) => s.dispatchState);
   const dispatchError = useConsole((s) => s.dispatchError);
@@ -86,7 +87,9 @@ export default function DispatchSheet() {
   }, [setSheetOpen]);
 
   const all = Object.values(potholes);
-  const crew = crews.find((c) => c.id === planner.crewId);
+  // Two different crews, deliberately: the one being chosen, and the one the
+  // standing route was solved for. Only the second may appear on a plan.
+  const planCrew = crews.find((c) => c.id === planCrewId);
   const inArea = countInArea(all, planner.area);
   const candidates = planCandidates(all, {
     mode: planner.mode, area: planner.area, selectedCount: selected.length,
@@ -121,7 +124,9 @@ export default function DispatchSheet() {
       return;
     }
     clearSelection();
-    for (const s of planned.stops) if (s.pothole_id !== id) toggleSelected(s.pothole_id);
+    for (const s of planned.stops) {
+      if (s.pothole_id !== id && s.work_order_id !== id) toggleSelected(s.pothole_id);
+    }
     void planRoute();
   }
 
@@ -186,12 +191,12 @@ export default function DispatchSheet() {
             <>
               <dl style={{ margin: 0, display: "grid", gap: "var(--s2)" }}>
                 <Line label="Work order" value={planned.route_plan_id} />
-                <Line label="Crew" value={crew?.name ?? "—"} />
+                <Line label="Crew" value={planCrew?.name ?? "—"} />
                 <Line label="Stops" value={`${planned.stops.length}, ${km(planned.total_km)}, ${minutes(planned.total_minutes)}`} />
                 <Line label="Sent to" value={plural(dispatchedTo, "address", "addresses")} />
               </dl>
               <p style={{ margin: 0, fontSize: "var(--t-small)", lineHeight: 1.5, padding: "var(--s3)", background: "var(--committed-soft)", borderRadius: "var(--r-md)", border: "1px solid var(--committed-edge)" }}>
-                A work order with the route, the coordinates and the detector frames has been emailed to {crew?.name ?? "the crew"}.
+                A work order with the route, the coordinates and the detector frames has been emailed to {planCrew?.name ?? "the crew"}.
                 The stops now show as scheduled on the map.
               </p>
               <p style={{ margin: 0, fontSize: "var(--t-small)" }}>
@@ -203,42 +208,51 @@ export default function DispatchSheet() {
             </>
           ) : (
             <>
-              <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
-                <legend className="micro secondary" style={{ marginBottom: "var(--s2)" }}>
-                  Send to
-                </legend>
-                <div style={{ display: "grid", gap: 6 }}>
-                  {crews.map((c) => (
-                    <label
-                      key={c.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "var(--s3)",
-                        padding: "var(--s2) var(--s3)",
-                        border: `1px solid ${planner.crewId === c.id ? "var(--action)" : "var(--rule)"}`,
-                        background: planner.crewId === c.id ? "var(--action-soft)" : "var(--surface)",
-                        borderRadius: "var(--r-md)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="crew"
-                        value={c.id}
-                        checked={planner.crewId === c.id}
-                        onChange={() => setPlanner({
-                          crewId: c.id,
-                          maxStops: c.repairs_per_shift ?? planner.maxStops,
-                          timeBudgetMin: c.shift_minutes ?? planner.timeBudgetMin,
-                        })}
-                        style={{ accentColor: "var(--action)", width: 16, height: 16 }}
-                      />
-                      <span style={{ flex: 1, fontSize: "var(--t-small)", fontWeight: 600 }}>{c.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              {planned ? (
+                /* The route was solved for one crew. Reassigning it would mean
+                   planning again, so the crew is stated, not offered. */
+                <p style={{ margin: 0, fontSize: "var(--t-small)" }}>
+                  <span className="secondary">Crew:</span>{" "}
+                  <span style={{ fontWeight: 600 }}>{planCrew?.name ?? "—"}</span>
+                </p>
+              ) : (
+                <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
+                  <legend className="micro secondary" style={{ marginBottom: "var(--s2)" }}>
+                    Send to
+                  </legend>
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {crews.map((c) => (
+                      <label
+                        key={c.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "var(--s3)",
+                          padding: "var(--s2) var(--s3)",
+                          border: `1px solid ${planner.crewId === c.id ? "var(--action)" : "var(--rule)"}`,
+                          background: planner.crewId === c.id ? "var(--action-soft)" : "var(--surface)",
+                          borderRadius: "var(--r-md)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="crew"
+                          value={c.id}
+                          checked={planner.crewId === c.id}
+                          onChange={() => setPlanner({
+                            crewId: c.id,
+                            maxStops: c.repairs_per_shift ?? planner.maxStops,
+                            timeBudgetMin: c.shift_minutes ?? planner.timeBudgetMin,
+                          })}
+                          style={{ accentColor: "var(--action)", width: 16, height: 16 }}
+                        />
+                        <span style={{ flex: 1, fontSize: "var(--t-small)", fontWeight: 600 }}>{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
 
               {!planned && (
                 <div style={{ display: "grid", gap: "var(--s3)" }}>

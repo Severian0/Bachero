@@ -46,6 +46,13 @@ export interface ConsoleState {
   plannerOpen: boolean;
   planState: "idle" | "planning" | "planned" | "error";
   plan: PlanRouteResponse | null;
+  /**
+   * The crew the standing plan was actually computed for. Held apart from
+   * `planner.crewId`, which the operator can still change after a route comes
+   * back: the confirmation has to name the crew the route was solved for, not
+   * whichever radio is currently ticked.
+   */
+  planCrewId: string | null;
   planError?: string;
   dispatchState: "idle" | "sending" | "sent" | "error";
   dispatchError?: string;
@@ -124,7 +131,7 @@ export function createConsoleStore() {
       sheetOpen: false, drawing: false,
       planner: { crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20, area: null, planDate: tomorrowISO() },
       plannerOpen: false,
-      planState: "idle", plan: null, dispatchState: "idle", dispatchedTo: 0,
+      planState: "idle", plan: null, planCrewId: null, dispatchState: "idle", dispatchedTo: 0,
       pendingDismiss: null,
 
       setDataSource(d) { ds = d; },
@@ -225,12 +232,15 @@ export function createConsoleStore() {
         set({ planState: "planning", planError: undefined });
         try {
           const plan = await ds.planRoute(req);
-          set({ planState: "planned", plan, plannerOpen: false, selected: [], dispatchState: "idle", dispatchedTo: 0 });
+          set({
+            planState: "planned", plan, planCrewId: req.crew_id, plannerOpen: false, selected: [],
+            dispatchState: "idle", dispatchedTo: 0,
+          });
         } catch {
           set({ planState: "error", planError: PLAN_ERROR });
         }
       },
-      resetPlan() { set({ planState: "idle", plan: null, planError: undefined, dispatchState: "idle", dispatchError: undefined, dispatchedTo: 0 }); },
+      resetPlan() { set({ planState: "idle", plan: null, planCrewId: null, planError: undefined, dispatchState: "idle", dispatchError: undefined, dispatchedTo: 0 }); },
       async dispatch(to) {
         const plan = get().plan;
         if (!ds || !plan) return;
