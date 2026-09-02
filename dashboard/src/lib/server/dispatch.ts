@@ -69,13 +69,17 @@ export const MAX_WAYPOINTS = 8;
 
 /** Google Maps is the one place that wants latitude first. */
 function latLng([lng, lat]: LngLat): string {
-  return `${lat},${lng}`;
+  return `${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
 
 /**
  * Splits a depot-to-depot tour into Google Maps directions links of at most
  * `MAX_WAYPOINTS` intermediate stops each. Consecutive legs share the point
  * they meet at, so following them in order visits every stop exactly once.
+ *
+ * The query is written by hand rather than with `URLSearchParams`: the format
+ * in docs/ARCHITECTURE.md §5 keeps the commas between coordinates and the pipes
+ * between waypoints literal, and `URLSearchParams` percent-encodes both.
  */
 export function buildGmapsLegs(points: LngLat[]): string[] {
   if (points.length < 2) return [];
@@ -84,14 +88,14 @@ export function buildGmapsLegs(points: LngLat[]): string[] {
 
   for (let start = 0; start < points.length - 1; start += step) {
     const end = Math.min(start + step, points.length - 1);
-    const params = new URLSearchParams({ api: "1", origin: latLng(points[start]), destination: latLng(points[end]) });
     const waypoints = points.slice(start + 1, end);
-    if (waypoints.length > 0) {
-      // Google's own separator; URLSearchParams would percent-encode it.
-      params.set("waypoints", waypoints.map(latLng).join("|"));
-    }
-    params.set("travelmode", "driving");
-    links.push(`https://www.google.com/maps/dir/?${params.toString().replaceAll("%7C", "|")}`);
+    links.push(
+      "https://www.google.com/maps/dir/?api=1" +
+        `&origin=${latLng(points[start])}` +
+        `&destination=${latLng(points[end])}` +
+        (waypoints.length === 0 ? "" : `&waypoints=${waypoints.map(latLng).join("|")}`) +
+        "&travelmode=driving",
+    );
   }
 
   return links;
@@ -136,7 +140,7 @@ function stopLine(stop: DispatchStop, index: number): string {
 }
 
 function photoOf(stop: DispatchStop): string | null {
-  return stop.before_photo_url ?? stop.pothole.photo_url;
+  return stop.pothole.photo_url;
 }
 
 const round1 = (value: number | null) => (value === null ? null : Math.round(value * 10) / 10);

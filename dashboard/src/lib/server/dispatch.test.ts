@@ -17,6 +17,7 @@ const CREW = "00000000-0000-0000-0000-000000000006";
 // SRID=4326;POINT(-0.1246 51.4994), the seeded Crew A depot.
 const DEPOT_HEX = "0101000020e6100000bde3141dc9e5bfbfabcfd556ecbf4940";
 const DEPOT: LngLat = [-0.1246, 51.4994];
+const DEPOT_LATLNG = "51.499400,-0.124600";
 const APP_URL = "https://bachero.example";
 
 // ─── validateDispatchRequest ──────────────────────────────────────────────────
@@ -74,13 +75,44 @@ function waypointsOf(url: string): string[] {
 }
 
 describe("buildGmapsLegs", () => {
+  // The exact string docs/ARCHITECTURE.md §5 documents: literal commas between
+  // the coordinates of a point and a literal pipe between waypoints, neither of
+  // which survives URLSearchParams.
+  it("emits the documented link format verbatim for a two-stop plan", () => {
+    const links = buildGmapsLegs([DEPOT, [1, 101], [2, 102], DEPOT]);
+    expect(links).toEqual([
+      "https://www.google.com/maps/dir/?api=1" +
+        "&origin=51.499400,-0.124600" +
+        "&destination=51.499400,-0.124600" +
+        "&waypoints=101.000000,1.000000|102.000000,2.000000" +
+        "&travelmode=driving",
+    ]);
+  });
+
+  it("emits both raw legs for a nine-stop plan, meeting at stop 9", () => {
+    const links = buildGmapsLegs([DEPOT, ...stopPoints(9), DEPOT]);
+    expect(links).toEqual([
+      "https://www.google.com/maps/dir/?api=1" +
+        "&origin=51.499400,-0.124600" +
+        "&destination=109.000000,9.000000" +
+        "&waypoints=101.000000,1.000000|102.000000,2.000000|103.000000,3.000000|104.000000,4.000000" +
+        "|105.000000,5.000000|106.000000,6.000000|107.000000,7.000000|108.000000,8.000000" +
+        "&travelmode=driving",
+      // No waypoints on the last leg, so the parameter is left out entirely.
+      "https://www.google.com/maps/dir/?api=1" +
+        "&origin=109.000000,9.000000" +
+        "&destination=51.499400,-0.124600" +
+        "&travelmode=driving",
+    ]);
+  });
+
   it("writes lat,lng (the one place that is not longitude first)", () => {
     const [link, ...rest] = buildGmapsLegs([DEPOT, [1, 101], DEPOT]);
     expect(rest).toEqual([]);
     expect(link.startsWith("https://www.google.com/maps/dir/?api=1&")).toBe(true);
-    expect(paramsOf(link).get("origin")).toBe("51.4994,-0.1246");
-    expect(paramsOf(link).get("destination")).toBe("51.4994,-0.1246");
-    expect(waypointsOf(link)).toEqual(["101,1"]);
+    expect(paramsOf(link).get("origin")).toBe(DEPOT_LATLNG);
+    expect(paramsOf(link).get("destination")).toBe(DEPOT_LATLNG);
+    expect(waypointsOf(link)).toEqual(["101.000000,1.000000"]);
     expect(paramsOf(link).get("travelmode")).toBe("driving");
   });
 
@@ -88,8 +120,8 @@ describe("buildGmapsLegs", () => {
     const links = buildGmapsLegs([DEPOT, ...stopPoints(8), DEPOT]);
     expect(links).toHaveLength(1);
     expect(waypointsOf(links[0])).toHaveLength(8);
-    expect(paramsOf(links[0]).get("origin")).toBe("51.4994,-0.1246");
-    expect(paramsOf(links[0]).get("destination")).toBe("51.4994,-0.1246");
+    expect(paramsOf(links[0]).get("origin")).toBe(DEPOT_LATLNG);
+    expect(paramsOf(links[0]).get("destination")).toBe(DEPOT_LATLNG);
   });
 
   it("splits 9 stops into two legs that meet at stop 9", () => {
@@ -97,22 +129,22 @@ describe("buildGmapsLegs", () => {
     expect(links).toHaveLength(2);
     expect(waypointsOf(links[0])).toHaveLength(8);
     // Leg 1 ends at stop 9, which is where leg 2 starts.
-    expect(paramsOf(links[0]).get("destination")).toBe("109,9");
-    expect(paramsOf(links[1]).get("origin")).toBe("109,9");
+    expect(paramsOf(links[0]).get("destination")).toBe("109.000000,9.000000");
+    expect(paramsOf(links[1]).get("origin")).toBe("109.000000,9.000000");
     expect(waypointsOf(links[1])).toEqual([]);
-    expect(paramsOf(links[1]).get("destination")).toBe("51.4994,-0.1246");
+    expect(paramsOf(links[1]).get("destination")).toBe(DEPOT_LATLNG);
   });
 
   it("splits 20 stops into three legs with no gaps and never more than 8 waypoints", () => {
     const links = buildGmapsLegs([DEPOT, ...stopPoints(20), DEPOT]);
     expect(links).toHaveLength(3);
     expect(links.map((l) => waypointsOf(l).length)).toEqual([8, 8, 2]);
-    expect(paramsOf(links[0]).get("origin")).toBe("51.4994,-0.1246");
-    expect(paramsOf(links[0]).get("destination")).toBe("109,9");
-    expect(paramsOf(links[1]).get("origin")).toBe("109,9");
-    expect(paramsOf(links[1]).get("destination")).toBe("118,18");
-    expect(paramsOf(links[2]).get("origin")).toBe("118,18");
-    expect(paramsOf(links[2]).get("destination")).toBe("51.4994,-0.1246");
+    expect(paramsOf(links[0]).get("origin")).toBe(DEPOT_LATLNG);
+    expect(paramsOf(links[0]).get("destination")).toBe("109.000000,9.000000");
+    expect(paramsOf(links[1]).get("origin")).toBe("109.000000,9.000000");
+    expect(paramsOf(links[1]).get("destination")).toBe("118.000000,18.000000");
+    expect(paramsOf(links[2]).get("origin")).toBe("118.000000,18.000000");
+    expect(paramsOf(links[2]).get("destination")).toBe(DEPOT_LATLNG);
 
     // Every stop appears exactly once across the legs, in order.
     const visited = links.flatMap((l, i) => [
@@ -121,9 +153,9 @@ describe("buildGmapsLegs", () => {
       paramsOf(l).get("destination"),
     ]);
     expect(visited).toEqual([
-      "51.4994,-0.1246",
-      ...stopPoints(20).map(([lng, lat]) => `${lat},${lng}`),
-      "51.4994,-0.1246",
+      DEPOT_LATLNG,
+      ...stopPoints(20).map(([lng, lat]) => `${lat.toFixed(6)},${lng.toFixed(6)}`),
+      DEPOT_LATLNG,
     ]);
   });
 });
