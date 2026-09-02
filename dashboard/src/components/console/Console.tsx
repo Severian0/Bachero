@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useConsole } from "@/lib/console/store";
 import { createDataSource } from "@/lib/data";
 import { ConsoleHeader } from "./ConsoleHeader";
+import { MapLayers } from "./map/MapLayers";
 
 const ConsoleMap = dynamic(() => import("./map/ConsoleMap").then((m) => m.ConsoleMap), { ssr: false });
 
@@ -42,7 +43,7 @@ export default function Console() {
     <div className="h-screen grid overflow-hidden bg-bg text-text" style={{ gridTemplateRows: "var(--console-header-h) 1fr" }}>
       <ConsoleHeader />
       <main className="grid min-h-0" style={{ gridTemplateColumns: "1fr var(--console-column-w)" }}>
-        <ConsoleMap onMapMouseLeave={unlink} />
+        <ConsoleMap onMapMouseLeave={unlink}><MapLayers /></ConsoleMap>
         <aside className="grid min-h-0 bg-bg" style={{ gridTemplateRows: "auto auto auto minmax(0,1fr) auto auto auto" }}>
           <div className="p-4 border-b border-divider panel-label">Repair queue</div>
         </aside>

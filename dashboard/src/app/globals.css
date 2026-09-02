@@ -307,4 +307,4 @@
 .maplibregl-ctrl-attrib { font: 10px/1.4 var(--font-body); background: color-mix(in srgb, var(--color-bg) 85%, transparent); }
 .maplibregl-ctrl-attrib a { color: var(--ink-55); }
 .maplibregl-map { font-family: var(--font-body); }
-.maplibregl-marker { will-change: transform; }
+.maplibregl-marker { will-change: transform; z-index: 20; }
