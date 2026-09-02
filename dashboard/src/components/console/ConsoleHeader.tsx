@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useConsole } from "@/lib/console/store";
 import { DEMO_AUTHORITY } from "@/lib/data/synthetic";
+import { km } from "@/lib/console/format";
 
 const REPORTING_WINDOW_MS = 60_000;
 const NOW_TICK_MS = 5_000;
@@ -34,7 +35,7 @@ export function ConsoleHeader() {
           <i className="live-dot" aria-hidden />
           {reporting > 0 ? `${reporting} vehicles reporting` : "Feed paused"}
         </span>
-        <span className="tabular">{kmToday.toFixed(1)} km scanned today</span>
+        <span className="tabular">{km(kmToday)} scanned today</span>
         <span className="px-3 py-1 border border-divider rounded-lg">{date}</span>
       </div>
     </header>

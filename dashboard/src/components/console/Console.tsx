@@ -29,6 +29,7 @@ export default function Console() {
       } catch (e) {
         st.setLoadState("error", e instanceof Error ? e.message : "Unknown error");
       }
+      if (cancelled) return;
       off = ds.subscribe({
         onPothole: (u) => ("deleted" in u ? st.removePothole(u.id) : st.upsertPothole(u)),
         onVehiclePosition: (v) => { st.pushVehiclePosition(v); st.setKmToday(useConsole.getState().kmToday + 0.11 / 3); },
