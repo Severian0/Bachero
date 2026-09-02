@@ -1,6 +1,7 @@
-import Console from "@/components/console/Console";
+import Console from "@/components/Console";
+import { loadConsoleData } from "@/lib/potholes";
 
-// Console — docs/superpowers/specs/2026-09-02-console-map-design.md.
-export default function DashboardPage() {
-  return <Console />;
+export default async function Page() {
+  const data = await loadConsoleData();
+  return <Console data={data} />;
 }
