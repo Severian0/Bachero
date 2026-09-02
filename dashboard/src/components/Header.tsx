@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Mark } from "./Logo";
-import { AUTHORITY, OPERATOR } from "@/lib/fixtures";
+import { AUTHORITY, OPERATOR } from "@/lib/console/branding";
 
 /**
  * The bar across the top: what this is, whether it is live, and who is

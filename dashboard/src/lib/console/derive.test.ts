@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  priority, pinStyle, rowStyle, severitySegments, evidenceLine, inspectorLines,
+  priority, pinStyle, rowStyle, severitySegments, severityGrade, evidenceLine, inspectorLines,
   matchesFilter, visibleRows, stats, isSelectable, FILTER_CYCLE,
 } from "./derive";
 import type { Pothole } from "@/lib/data/types";
@@ -69,6 +69,20 @@ describe("severitySegments", () => {
   });
 });
 
+describe("severityGrade", () => {
+  it("maps the 0-1 severity onto the 1-4 grade the record and the pin quote", () => {
+    expect(severityGrade(0)).toBe(1);
+    expect(severityGrade(0.25)).toBe(1);
+    expect(severityGrade(0.26)).toBe(2);
+    expect(severityGrade(0.75)).toBe(3);
+    expect(severityGrade(1)).toBe(4);
+  });
+  it("clamps values outside the range rather than indexing off the end of a table", () => {
+    expect(severityGrade(-1)).toBe(1);
+    expect(severityGrade(1.4)).toBe(4);
+  });
+});
+
 describe("copy", () => {
   it("evidence line states measurement then inference", () => {
     expect(evidenceLine(base)).toBe("2 vehicles · 6 passes · confirmed");
@@ -109,6 +123,6 @@ describe("filters and stats", () => {
     expect(list.map(isSelectable)).toEqual([true, true, true, false, false]);
   });
   it("filter cycle is the chip order", () => {
-    expect(FILTER_CYCLE).toEqual(["open", "suspected", "confirmed", "scheduled"]);
+    expect(FILTER_CYCLE).toEqual(["all", "confirmed", "suspected", "scheduled"]);
   });
 });

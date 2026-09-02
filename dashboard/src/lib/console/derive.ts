@@ -3,7 +3,8 @@ import type { PotholeStatus } from "@/lib/types";
 import { coord, hhmm, monthsSince, plural } from "./format";
 
 export type Filter = "open" | "suspected" | "confirmed" | "scheduled" | "all";
-export const FILTER_CYCLE: Filter[] = ["open", "suspected", "confirmed", "scheduled"];
+/** Chip order, and the order the f key steps through. */
+export const FILTER_CYCLE: Filter[] = ["all", "confirmed", "suspected", "scheduled"];
 export const FILTER_LABELS: Record<Filter, string> = {
   open: "Open", suspected: "Suspected", confirmed: "Confirmed", scheduled: "Scheduled", all: "All",
 };
@@ -54,6 +55,14 @@ export function rowStyle(p: Pothole, { linked, selected }: Flags): RowStyle {
     bg: selected ? "var(--color-accent-100)" : linked ? "var(--ink-5)" : "transparent",
     priColor: selected || linked ? "var(--color-accent-800)" : "var(--ink-72)",
   };
+}
+
+/**
+ * The 0-1 severity as the 1-4 grade the record and the pin quote. Clamped, so
+ * a value from outside the range can never index off the end of a table.
+ */
+export function severityGrade(severity: number): 1 | 2 | 3 | 4 {
+  return Math.min(4, Math.max(1, Math.ceil(severity * 4))) as 1 | 2 | 3 | 4;
 }
 
 export function severitySegments(severity: number): boolean[] {

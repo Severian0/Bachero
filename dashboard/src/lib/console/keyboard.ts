@@ -19,12 +19,16 @@ export function handleKey(
   }
   if (e.key === "Enter") {
     if (!s.linkedId) return false;
+    // Enter opens the record. Adding it to a route is a decision, and decisions
+    // are made in the record, where the evidence for them is on screen.
     e.preventDefault();
-    s.toggleSelected(s.linkedId);
+    s.pin(s.linkedId);
     return true;
   }
   if (e.key === "Escape") {
-    if (s.pinnedId) s.unpin();
+    // One step back per press, outermost thing first.
+    if (s.sheetOpen) s.setSheetOpen(false);
+    else if (s.pinnedId) s.unpin();
     else if (s.linkedId) s.unlink();
     else s.clearSelection();
     return true;

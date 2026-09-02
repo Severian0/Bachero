@@ -122,12 +122,21 @@ describe("console store", () => {
 
   it("cycleFilter follows chip order and wraps", () => {
     const s = createConsoleStore();
-    expect(s.getState().filter).toBe("open");
+    expect(s.getState().filter).toBe("all");
     s.getState().cycleFilter();
-    expect(s.getState().filter).toBe("suspected");
+    expect(s.getState().filter).toBe("confirmed");
     s.getState().setFilter("scheduled");
     s.getState().cycleFilter();
-    expect(s.getState().filter).toBe("open");
+    expect(s.getState().filter).toBe("all");
+  });
+
+  it("the dispatch sheet is closed until it is asked for", () => {
+    const s = createConsoleStore();
+    expect(s.getState().sheetOpen).toBe(false);
+    s.getState().setSheetOpen(true);
+    expect(s.getState().sheetOpen).toBe(true);
+    s.getState().setSheetOpen(false);
+    expect(s.getState().sheetOpen).toBe(false);
   });
 
   it("planRoute builds the request from planner config and stores the result", async () => {

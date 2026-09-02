@@ -1,3 +1,6 @@
+import { displayName, severityGrade } from "@/lib/console/derive";
+import type { Pothole as ConsolePothole, Vehicle as ConsoleVehicle } from "@/lib/data/types";
+
 /** Lifecycle from the detection schema. `false_positive` leaves the map. */
 export type PotholeStatus =
   | "suspected"
@@ -69,3 +72,38 @@ export interface Bounds {
 }
 
 export type FilterKey = "all" | "suspected" | "confirmed" | "scheduled";
+
+/*
+ * Temporary adapters from the console store's domain types to the shapes the
+ * screen's children still take. They exist only while the children are being
+ * moved over one at a time; the last task to land deletes this file.
+ */
+
+/** A pothole as the store holds it, mapped onto the record above. */
+export function toRecord(p: ConsolePothole): Pothole {
+  return {
+    id: p.id,
+    ref: p.ref,
+    street: displayName(p),
+    locality: "",
+    lat: p.lat,
+    lng: p.lng,
+    severity: severityGrade(p.severity),
+    // Rounded for the queue column, which prints the figure in a 26px cell.
+    priority: Math.round(p.priority * 10) / 10,
+    status: p.status,
+    vehicleCount: p.distinct_vehicles,
+    passCount: p.detection_count,
+    firstSeenIso: p.first_detected_at,
+    lastSeenIso: p.last_detected_at,
+    confidence: null,
+    frameCount: p.detection_count,
+    imageUrl: p.photo_url,
+    stopOrder: p.stop_order,
+  };
+}
+
+/** A vehicle as the store holds it, flattened to the position the map draws. */
+export function toVehicleRecord(v: ConsoleVehicle): Vehicle {
+  return { id: v.id, label: v.label, lat: v.position.lat, lng: v.position.lng };
+}

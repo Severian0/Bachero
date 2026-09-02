@@ -1,9 +1,5 @@
 import type { Bounds, Crew, Pothole, Vehicle } from "./model";
 
-/** The authority this console belongs to. */
-export const AUTHORITY = "Transport for London";
-export const DIRECTORATE = "Road Network Directorate";
-
 /** Inner London. The console opens here and the operator pans from it. */
 export const LONDON_CENTRE = { lat: 51.5074, lng: -0.1178 };
 export const LONDON_ZOOM = 12;
@@ -78,6 +74,3 @@ export const CREWS: Crew[] = [
 
 /** Distance the fleet has covered today. */
 export const MOCK_KM_SCANNED = 412.8;
-
-/** The signed-in operator. Every dispatch is attributed to a named person. */
-export const OPERATOR = { name: "D. Mackie", role: "Network Duty Officer" };

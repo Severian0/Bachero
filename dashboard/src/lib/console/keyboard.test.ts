@@ -24,27 +24,44 @@ describe("handleKey", () => {
     handleKey(ev("ArrowUp"), s.getState(), rows);
     expect(s.getState().linkedId).toBe("b");
   });
-  it("Enter toggles the linked item; Esc unpins, then unlinks, then clears selection", () => {
+  it("Enter opens the linked record rather than selecting it", () => {
     const s = createConsoleStore();
     const rows = [mk("a")];
     s.getState().upsertPothole(rows[0]);
+    expect(handleKey(ev("Enter"), s.getState(), rows)).toBe(false);
     s.getState().link("a", "keys");
-    handleKey(ev("Enter"), s.getState(), rows);
-    expect(s.getState().selected).toEqual(["a"]);
+    expect(handleKey(ev("Enter"), s.getState(), rows)).toBe(true);
+    expect(s.getState().pinnedId).toBe("a");
+    expect(s.getState().selected).toEqual([]);
+  });
+  it("Esc closes the sheet, then unpins, then unlinks, then clears the selection", () => {
+    const s = createConsoleStore();
+    const rows = [mk("a")];
+    s.getState().upsertPothole(rows[0]);
+    s.getState().toggleSelected("a");
     s.getState().pin("a");
+    s.getState().setSheetOpen(true);
+
+    handleKey(ev("Escape"), s.getState(), rows);
+    expect(s.getState().sheetOpen).toBe(false);
+    expect(s.getState().pinnedId).toBe("a");
+
     handleKey(ev("Escape"), s.getState(), rows);
     expect(s.getState().pinnedId).toBeNull();
     expect(s.getState().linkedId).toBe("a");
+
     handleKey(ev("Escape"), s.getState(), rows);
     expect(s.getState().linkedId).toBeNull();
+
+    expect(s.getState().selected).toEqual(["a"]);
     handleKey(ev("Escape"), s.getState(), rows);
     expect(s.getState().selected).toEqual([]);
   });
   it("F cycles the filter; keys in inputs are ignored", () => {
     const s = createConsoleStore();
     handleKey(ev("f"), s.getState(), []);
-    expect(s.getState().filter).toBe("suspected");
+    expect(s.getState().filter).toBe("confirmed");
     expect(handleKey(ev("f", "INPUT"), s.getState(), [])).toBe(false);
-    expect(s.getState().filter).toBe("suspected");
+    expect(s.getState().filter).toBe("confirmed");
   });
 });

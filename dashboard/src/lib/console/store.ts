@@ -34,6 +34,8 @@ export interface ConsoleState {
   selected: string[];
   filter: Filter;
   density: "comfortable" | "compact";
+  /** The dispatch sheet, the one thing on this screen that interrupts. */
+  sheetOpen: boolean;
 
   planner: PlannerConfig;
   plannerOpen: boolean;
@@ -68,6 +70,7 @@ export interface ConsoleActions {
   setFilter(f: Filter): void;
   cycleFilter(): void;
   setDensity(d: ConsoleState["density"]): void;
+  setSheetOpen(open: boolean): void;
 
   setPlanner(patch: Partial<PlannerConfig>): void;
   setPlannerOpen(open: boolean): void;
@@ -111,7 +114,8 @@ export function createConsoleStore() {
     return {
       potholes: {}, vehicles: {}, crews: [], kmToday: 0, detections: {},
       loadState: "loading",
-      linkedId: null, linkSource: null, pinnedId: null, selected: [], filter: "open", density: "comfortable",
+      linkedId: null, linkSource: null, pinnedId: null, selected: [], filter: "all", density: "comfortable",
+      sheetOpen: false,
       planner: { crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20, area: null, planDate: tomorrowISO() },
       plannerOpen: false,
       planState: "idle", plan: null, dispatchState: "idle", dispatchedTo: 0,
@@ -193,6 +197,7 @@ export function createConsoleStore() {
         set({ filter: FILTER_CYCLE[(i + 1) % FILTER_CYCLE.length] });
       },
       setDensity(density) { set({ density }); },
+      setSheetOpen(sheetOpen) { set({ sheetOpen }); },
 
       setPlanner(patch) { set((s) => ({ planner: { ...s.planner, ...patch } })); },
       setPlannerOpen(plannerOpen) { set({ plannerOpen }); },

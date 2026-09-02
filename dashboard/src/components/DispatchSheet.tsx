@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CREWS, OPERATOR } from "@/lib/fixtures";
+import { CREWS } from "@/lib/fixtures";
+import { OPERATOR } from "@/lib/console/branding";
 import { CREW_KM_PER_HOUR, MINUTES_ON_SITE } from "@/lib/route";
 import { SEVERITY_WORD, STATUS_VISUAL } from "@/lib/visual";
 import type { Crew, Pothole } from "@/lib/model";

@@ -1,153 +1,152 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import Header from "./Header";
 import PotholeMap from "./PotholeMap";
 import OperationsColumn from "./OperationsColumn";
 import RecordPanel from "./RecordPanel";
 import DispatchSheet from "./DispatchSheet";
 import { planRoute } from "@/lib/route";
-import type { ConsoleData } from "@/lib/potholes";
-import type { FilterKey, Pothole } from "@/lib/model";
+import { toRecord, toVehicleRecord } from "@/lib/model";
+import type { FilterKey } from "@/lib/model";
+import { useConsole } from "@/lib/console/store";
+import { handleKey } from "@/lib/console/keyboard";
+import { displayName, stats, visibleRows } from "@/lib/console/derive";
+import { createDataSource, isSupabaseConfigured } from "@/lib/data";
 
-const FILTER_ORDER: FilterKey[] = ["all", "confirmed", "suspected", "scheduled"];
+/**
+ * The console. One screen: the fleet's evidence on the left, the repair queue
+ * and the record under inspection on the right, and the one interruption in
+ * the product — committing a crew's day — over the top of both.
+ *
+ * The screen holds no state of its own. Everything on it is read from the
+ * console store, which owns the live data source, so the map and the column
+ * can never disagree about what has been seen.
+ */
+export default function Console() {
+  const potholes = useConsole((s) => s.potholes);
+  const vehicles = useConsole((s) => s.vehicles);
+  const filter = useConsole((s) => s.filter);
+  const linkedId = useConsole((s) => s.linkedId);
+  const pinnedId = useConsole((s) => s.pinnedId);
+  const selected = useConsole((s) => s.selected);
+  const sheetOpen = useConsole((s) => s.sheetOpen);
+  const pendingDismiss = useConsole((s) => s.pendingDismiss);
+  const loadState = useConsole((s) => s.loadState);
 
-export default function Console({ data }: { data: ConsoleData }) {
-  const [potholes, setPotholes] = useState<Pothole[]>(data.potholes);
-  const [filter, setFilter] = useState<FilterKey>("all");
-  const [linkedId, setLinkedId] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [routeIds, setRouteIds] = useState<Set<string>>(new Set());
-  const [dispatching, setDispatching] = useState(false);
-  const [undo, setUndo] = useState<Pothole | null>(null);
+  const link = useConsole((s) => s.link);
+  const unlink = useConsole((s) => s.unlink);
+  const pin = useConsole((s) => s.pin);
+  const unpin = useConsole((s) => s.unpin);
+  const toggleSelected = useConsole((s) => s.toggleSelected);
+  const clearSelection = useConsole((s) => s.clearSelection);
+  const setFilter = useConsole((s) => s.setFilter);
+  const setSheetOpen = useConsole((s) => s.setSheetOpen);
+  const dismiss = useConsole((s) => s.dismiss);
+  const undoDismiss = useConsole((s) => s.undoDismiss);
+  const resetPlan = useConsole((s) => s.resetPlan);
 
-  const visible = useMemo(
-    () => potholes.filter((p) => p.status !== "false_positive"),
-    [potholes],
-  );
+  // The store's `open` grouping has no chip of its own in this column; it is
+  // the whole queue minus what has been closed, which reads as All.
+  const filterKey: FilterKey = filter === "open" ? "all" : filter;
 
-  const counts = useMemo(() => {
-    const c: Record<FilterKey, number> = { all: visible.length, suspected: 0, confirmed: 0, scheduled: 0 };
-    for (const p of visible) {
-      if (p.status === "suspected") c.suspected += 1;
-      if (p.status === "confirmed") c.confirmed += 1;
-      if (p.status === "scheduled") c.scheduled += 1;
-    }
-    return c;
-  }, [visible]);
+  const all = useMemo(() => Object.values(potholes), [potholes]);
+  const queue = useMemo(() => visibleRows(all, filter), [all, filter]);
+  const rows = useMemo(() => queue.map(toRecord), [queue]);
+  const visible = useMemo(() => visibleRows(all, "all").map(toRecord), [all]);
+  const vehicleRecords = useMemo(() => Object.values(vehicles).map(toVehicleRecord), [vehicles]);
 
-  const rows = useMemo(() => {
-    const filtered = filter === "all" ? visible : visible.filter((p) => p.status === filter);
-    return [...filtered].sort((a, b) => a.priority - b.priority);
-  }, [visible, filter]);
+  const counts = useMemo<Record<FilterKey, number>>(() => {
+    const s = stats(all);
+    return {
+      all: all.filter((p) => p.status !== "false_positive").length,
+      confirmed: s.confirmedOpen,
+      suspected: s.suspected,
+      scheduled: s.scheduled,
+    };
+  }, [all]);
 
   // The map and the list are one instrument, so they answer to the same
   // filter. Records outside it stay on the map, stepped back rather than
   // removed, so the operator keeps their bearings.
   const inFilter = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
+  const routeIds = useMemo(() => new Set(selected), [selected]);
 
-  const opened = openId ? (visible.find((p) => p.id === openId) ?? null) : null;
+  const opened = useMemo(() => {
+    const p = pinnedId ? potholes[pinnedId] : undefined;
+    return p && p.status !== "false_positive" ? toRecord(p) : null;
+  }, [pinnedId, potholes]);
+
   const route = useMemo(
-    () => planRoute(visible.filter((p) => routeIds.has(p.id))),
-    [visible, routeIds],
+    () => planRoute(selected.map((id) => potholes[id]).filter((p) => p != null).map(toRecord)),
+    [selected, potholes],
   );
 
-  const toggleRoute = useCallback((id: string) => {
-    setRouteIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const linkFromMap = useCallback((id: string | null) => (id ? link(id, "map") : unlink()), [link, unlink]);
+  const linkFromRow = useCallback((id: string | null) => (id ? link(id, "row") : unlink()), [link, unlink]);
 
-  const dismiss = useCallback((id: string) => {
-    setPotholes((prev) => {
-      const target = prev.find((p) => p.id === id);
-      if (target) setUndo(target);
-      return prev.map((p) => (p.id === id ? { ...p, status: "false_positive" as const } : p));
-    });
-    setRouteIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    setOpenId(null);
-  }, []);
-
-  const restore = useCallback(() => {
-    setUndo((u) => {
-      if (u) setPotholes((prev) => prev.map((p) => (p.id === u.id ? u : p)));
-      return null;
-    });
-  }, []);
-
-  // Dismissal is always undoable, and the offer expires rather than lingering.
-  useEffect(() => {
-    if (!undo) return;
-    const id = window.setTimeout(() => setUndo(null), 10_000);
-    return () => window.clearTimeout(id);
-  }, [undo]);
-
-  const onDispatched = useCallback(
-    () => {
-      setPotholes((prev) => {
-        const order = new Map(route.stops.map((s, i) => [s.id, i + 1]));
-        const highest = prev.reduce((n, p) => Math.max(n, p.stopOrder ?? 0), 0);
-        return prev.map((p) =>
-          order.has(p.id)
-            ? { ...p, status: "scheduled" as const, stopOrder: highest + order.get(p.id)! }
-            : p,
-        );
-      });
-      setRouteIds(new Set());
-    },
-    [route.stops],
-  );
+  // Dispatch is not yet wired to the work-order service, so sending closes the
+  // sheet and drops the proposed plan. The store's own dispatch replaces this.
+  const onDispatched = useCallback(() => {
+    setSheetOpen(false);
+    resetPlan();
+  }, [setSheetOpen, resetPlan]);
 
   // Keyboard is first class. The linked row and the linked pin are the same
-  // idea as focus, so the arrow keys move both at once.
+  // idea as focus, so the arrow keys move both at once. The sheet is modal and
+  // runs its own keys, so the screen stands down while it is open.
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (dispatching) return;
-      const el = e.target as HTMLElement | null;
-      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
-
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        if (rows.length === 0) return;
-        const i = rows.findIndex((r) => r.id === linkedId);
-        const step = e.key === "ArrowDown" ? 1 : -1;
-        const next = i === -1 ? (step === 1 ? 0 : rows.length - 1) : i + step;
-        setLinkedId(rows[Math.min(rows.length - 1, Math.max(0, next))].id);
-      } else if (e.key === "Enter" && linkedId && !opened) {
-        e.preventDefault();
-        setOpenId(linkedId);
-      } else if (e.key === "Escape") {
-        if (opened) setOpenId(null);
-        else setLinkedId(null);
-      } else if (e.key === "f" || e.key === "F") {
-        setFilter((f) => FILTER_ORDER[(FILTER_ORDER.indexOf(f) + 1) % FILTER_ORDER.length]);
-      }
-    }
+    if (sheetOpen) return;
+    const onKey = (e: KeyboardEvent) => { handleKey(e, useConsole.getState(), queue); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows, linkedId, opened, dispatching]);
+  }, [queue, sheetOpen]);
+
+  // The live data source: Supabase where it is configured, the synthetic fleet
+  // otherwise. Mounted once, and the subscription is torn down with the screen.
+  useEffect(() => {
+    const st = useConsole.getState();
+    let off = () => {};
+    let cancelled = false;
+    (async () => {
+      const ds = await createDataSource();
+      if (cancelled) return;
+      st.setDataSource(ds);
+      try {
+        const res = await ds.load();
+        if (cancelled) return;
+        st.setAll(res.potholes);
+        st.setVehicles(res.vehicles);
+        st.setCrews(res.crews);
+        st.setKmToday(res.kmToday);
+        st.setLoadState("ready");
+      } catch (e) {
+        st.setLoadState("error", e instanceof Error ? e.message : "Unknown error");
+      }
+      if (cancelled) return;
+      off = ds.subscribe({
+        onPothole: (u) => ("deleted" in u ? st.removePothole(u.id) : st.upsertPothole(u)),
+        onVehicle: (v) => st.upsertVehicle(v),
+        onKmToday: (km) => st.setKmToday(km),
+      });
+    })();
+    return () => { cancelled = true; off(); };
+  }, []);
 
   return (
     <div style={{ height: "100dvh", display: "grid", gridTemplateRows: "56px minmax(0,1fr)", background: "var(--canvas)", overflow: "hidden" }}>
-      <Header live={data.live} />
+      <Header live={isSupabaseConfigured() && loadState === "ready"} />
 
       <main style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 396px", minHeight: 0 }}>
         <PotholeMap
           potholes={visible}
           inFilter={inFilter}
-          vehicles={data.vehicles}
+          vehicles={vehicleRecords}
           linkedId={linkedId}
-          openId={openId}
+          openId={pinnedId}
           routeIds={routeIds}
-          onLink={setLinkedId}
-          onOpen={setOpenId}
+          onLink={linkFromMap}
+          onOpen={pin}
         />
 
         <aside style={{ display: "grid", minHeight: 0, borderLeft: "1px solid var(--rule)", background: "var(--surface)" }}>
@@ -155,41 +154,41 @@ export default function Console({ data }: { data: ConsoleData }) {
             <RecordPanel
               pothole={opened}
               onRoute={routeIds.has(opened.id)}
-              onBack={() => setOpenId(null)}
-              onToggleRoute={() => toggleRoute(opened.id)}
+              onBack={unpin}
+              onToggleRoute={() => toggleSelected(opened.id)}
               onDismiss={() => dismiss(opened.id)}
             />
           ) : (
             <OperationsColumn
               rows={rows}
               counts={counts}
-              filter={filter}
+              filter={filterKey}
               onFilter={setFilter}
               linkedId={linkedId}
               routeIds={routeIds}
-              onLink={setLinkedId}
-              onOpen={setOpenId}
+              onLink={linkFromRow}
+              onOpen={pin}
               routeKm={route.km}
               routeMinutes={route.minutes}
-              onPlanRoute={() => setDispatching(true)}
-              onClearRoute={() => setRouteIds(new Set())}
+              onPlanRoute={() => setSheetOpen(true)}
+              onClearRoute={clearSelection}
             />
           )}
         </aside>
       </main>
 
-      {dispatching && (
+      {sheetOpen && (
         <DispatchSheet
           stops={route.stops}
           km={route.km}
           minutes={route.minutes}
-          onRemove={toggleRoute}
-          onClose={() => setDispatching(false)}
+          onRemove={toggleSelected}
+          onClose={() => setSheetOpen(false)}
           onSent={onDispatched}
         />
       )}
 
-      {undo && (
+      {pendingDismiss && (
         <div
           role="status"
           style={{
@@ -209,11 +208,11 @@ export default function Console({ data }: { data: ConsoleData }) {
           }}
         >
           <p style={{ margin: 0, fontSize: "var(--t-small)" }}>
-            {undo.street} dismissed as a false positive.
+            {displayName(pendingDismiss.previous)} dismissed as a false positive.
           </p>
           <button
             type="button"
-            onClick={restore}
+            onClick={undoDismiss}
             style={{
               border: "1px solid var(--rail-rule)",
               background: "var(--rail-2)",
