@@ -1,0 +1,102 @@
+import type { Pothole } from "@/lib/data/types";
+import type { PotholeStatus } from "@/lib/types";
+import { coord, hhmm, monthsSince, plural } from "./format";
+
+export type Filter = "open" | "suspected" | "confirmed" | "scheduled" | "all";
+export const FILTER_CYCLE: Filter[] = ["open", "suspected", "confirmed", "scheduled"];
+export const FILTER_LABELS: Record<Filter, string> = {
+  open: "Open", suspected: "Suspected", confirmed: "Confirmed", scheduled: "Scheduled", all: "All",
+};
+export const STATUS_LABEL: Record<PotholeStatus, string> = {
+  suspected: "Suspected", confirmed: "Confirmed", scheduled: "Scheduled", repaired: "Repaired", false_positive: "Dismissed",
+};
+
+type Flags = { linked: boolean; selected: boolean };
+
+/** Mirrors potholes_map.priority: severity × ln(1 + vehicles) × (1 + age in 30-day months). */
+export function priority(
+  p: Pick<Pothole, "severity" | "distinct_vehicles" | "first_detected_at">, now: Date = new Date(),
+): number {
+  const ageMonths = (now.getTime() - new Date(p.first_detected_at).getTime()) / 86_400_000 / 30;
+  return p.severity * Math.log(1 + p.distinct_vehicles) * (1 + ageMonths);
+}
+
+export interface PinStyle {
+  size: number; fill: string; stroke: string; glow: string; opacity: number; z: number; stopLabel: string; hidden: boolean;
+}
+
+export function pinStyle(p: Pothole, { linked, selected }: Flags): PinStyle {
+  let fill = "var(--color-bg)", stroke = "var(--ink-38)", opacity = 1;
+  if (p.status === "confirmed") { fill = "var(--color-accent)"; stroke = "var(--color-accent)"; }
+  if (p.status === "scheduled") { fill = "var(--color-accent-800)"; stroke = "var(--color-accent-800)"; }
+  if (p.status === "repaired") { stroke = "var(--color-neutral-300)"; opacity = 0.55; }
+  const size = Math.round(12 + p.severity * 11) + (linked || selected ? 5 : 0);
+  let glow = "var(--shadow-sm)";
+  if (selected) glow = "0 0 0 4px var(--color-accent-200)";
+  if (linked) glow = "0 0 0 5px color-mix(in srgb, var(--color-accent) 24%, transparent)";
+  return {
+    size, fill, stroke, glow, opacity,
+    z: linked ? 60 : selected ? 50 : 20,
+    stopLabel: p.status === "scheduled" && p.stop_order != null ? String(p.stop_order) : "",
+    hidden: p.status === "false_positive",
+  };
+}
+
+export interface RowStyle { mark: string; bg: string; priColor: string }
+
+export function rowStyle(p: Pothole, { linked, selected }: Flags): RowStyle {
+  let mark = "var(--color-neutral-400)";
+  if (p.status === "confirmed") mark = "var(--color-accent)";
+  if (p.status === "scheduled") mark = "var(--color-accent-800)";
+  if (p.status === "repaired") mark = "var(--color-neutral-300)";
+  return {
+    mark,
+    bg: selected ? "var(--color-accent-100)" : linked ? "var(--ink-5)" : "transparent",
+    priColor: selected || linked ? "var(--color-accent-800)" : "var(--ink-72)",
+  };
+}
+
+export function severitySegments(severity: number): boolean[] {
+  const filled = Math.max(1, Math.ceil(severity * 4));
+  return [0, 1, 2, 3].map((i) => i < filled);
+}
+
+export const displayName = (p: Pothole) => p.street ?? coord(p.lat, p.lng);
+
+export function evidenceLine(p: Pothole): string {
+  return `${plural(p.distinct_vehicles, "vehicle")} · ${plural(p.detection_count, "pass", "passes")} · ${STATUS_LABEL[p.status].toLowerCase()}`;
+}
+
+export function inspectorLines(p: Pothole, now: Date = new Date()) {
+  return {
+    title: `${displayName(p)} ${p.ref}`,
+    status: STATUS_LABEL[p.status],
+    line1: `${p.distinct_vehicles} distinct vehicles · ${p.detection_count} passes · last ${hhmm(p.last_detected_at)}`,
+    line2: `Severity ${p.severity.toFixed(2)} · age ${monthsSince(p.first_detected_at, now)} months · priority ${priority(p, now).toFixed(1)}`,
+  };
+}
+
+export function matchesFilter(p: Pothole, f: Filter): boolean {
+  if (f === "all") return p.status !== "false_positive";
+  if (f === "open") return p.status === "suspected" || p.status === "confirmed";
+  return p.status === f;
+}
+
+export function visibleRows(potholes: Pothole[], f: Filter, now: Date = new Date()): Pothole[] {
+  return potholes
+    .filter((p) => matchesFilter(p, f))
+    .map((p) => ({ p, pr: priority(p, now) }))
+    .sort((a, b) => b.pr - a.pr)
+    .map((x) => x.p);
+}
+
+export function stats(potholes: Pothole[]) {
+  return {
+    confirmedOpen: potholes.filter((p) => p.status === "confirmed").length,
+    suspected: potholes.filter((p) => p.status === "suspected").length,
+    scheduled: potholes.filter((p) => p.status === "scheduled").length,
+  };
+}
+
+export const isSelectable = (p: Pothole) =>
+  p.status === "suspected" || p.status === "confirmed" || p.status === "scheduled";
