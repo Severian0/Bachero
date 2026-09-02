@@ -2,6 +2,12 @@
 import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Map from "react-map-gl/maplibre";
 import type { MapLayerMouseEvent, MapRef } from "react-map-gl/maplibre";
+import { setWorkerUrl } from "maplibre-gl";
+
+// MapLibre derives its worker URL from import.meta.url, which the bundler does
+// not provide, so without this it spawns a worker from the page URL and the
+// map never loads. scripts/copy-maplibre-worker.mjs puts the worker in public/.
+if (typeof window !== "undefined") setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 import "maplibre-gl/dist/maplibre-gl.css";
 import { buildMapStyle } from "@/lib/map/style";
 import { readMapTokens } from "@/lib/map/tokens";
@@ -62,7 +68,13 @@ export function ConsoleMap({
         attributionControl={{ compact: true }}
         onMove={() => setTick((t) => t + 1)}
         onLoad={() => onStatus?.("ready")}
-        onError={(e) => { if (/tile|source|glyph/i.test(String(e.error?.message))) onStatus?.("failed"); }}
+        onError={(e) => {
+          // Any map error means the basemap will not finish loading, so say so
+          // rather than leaving the loading cover up. The message goes to the
+          // browser console for diagnosis (WebGL, tiles, glyphs, style).
+          console.error("Basemap error:", e.error?.message ?? e);
+          onStatus?.("failed");
+        }}
         {...mouseHandlers}
       >
         <MapTickContext.Provider value={tick}>
