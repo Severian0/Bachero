@@ -3,13 +3,23 @@ import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { useConsole } from "@/lib/console/store";
 import { createDataSource } from "@/lib/data";
+import { handleKey } from "@/lib/console/keyboard";
 import { ConsoleHeader } from "./ConsoleHeader";
 import { MapLayers } from "./map/MapLayers";
+import { Column } from "./column/Column";
+import { useVisibleRows } from "./column/QueueList";
 
 const ConsoleMap = dynamic(() => import("./map/ConsoleMap").then((m) => m.ConsoleMap), { ssr: false });
 
 export default function Console() {
   const unlink = useConsole((s) => s.unlink);
+  const rows = useVisibleRows();
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { handleKey(e, useConsole.getState(), rows); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [rows]);
 
   useEffect(() => {
     const st = useConsole.getState();
@@ -44,9 +54,7 @@ export default function Console() {
       <ConsoleHeader />
       <main className="grid min-h-0" style={{ gridTemplateColumns: "1fr var(--console-column-w)" }}>
         <ConsoleMap onMapMouseLeave={unlink}><MapLayers /></ConsoleMap>
-        <aside className="grid min-h-0 bg-bg" style={{ gridTemplateRows: "auto auto auto minmax(0,1fr) auto auto auto" }}>
-          <div className="p-4 border-b border-divider panel-label">Repair queue</div>
-        </aside>
+        <Column />
       </main>
     </div>
   );
