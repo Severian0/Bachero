@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildMatrix, haversineKm } from "./haversine";
-import { solve, tourKm, tourMin } from "./heuristic";
+import { solve, tourKm, tourMin, twoOpt } from "./heuristic";
 import type { Matrix } from "./haversine";
 
 // Depot at 0, four stops on a square 1 km apart, in an order that makes the
@@ -57,5 +57,23 @@ describe("solve", () => {
     const a = solve(cands, m, { mode: "count", maxStops: 3, serviceMin: 20 });
     const b = solve(cands, m, { mode: "count", maxStops: 3, serviceMin: 20 });
     expect(a).toEqual(b);
+  });
+});
+
+describe("twoOpt", () => {
+  it("un-crosses the priority-order tour into the shortest perimeter tour", () => {
+    const crossed = [0, 1, 2, 3]; // nw, se, ne, sw — self-crossing
+    // The two ways to walk the square's perimeter from the crossed order's
+    // start differ in km because each replaces a different side with two
+    // depot legs; take whichever is actually shortest as the target.
+    const perimeterA = tourKm([0, 2, 1, 3], m); // nw, ne, se, sw
+    const perimeterB = tourKm([0, 3, 1, 2], m); // nw, sw, se, ne
+    const shortestPerimeterKm = Math.min(perimeterA, perimeterB);
+
+    const result = twoOpt(crossed, m);
+
+    expect([...result].sort()).toEqual([0, 1, 2, 3]); // still a permutation
+    expect(tourKm(result, m)).toBeLessThan(tourKm(crossed, m));
+    expect(tourKm(result, m)).toBeCloseTo(shortestPerimeterKm, 9);
   });
 });

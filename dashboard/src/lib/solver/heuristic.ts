@@ -33,7 +33,7 @@ function marginalMin(order: number[], c: number, pos: number, m: Matrix, service
   return m.durationMin[prev][mi(c)] + m.durationMin[mi(c)][next] - m.durationMin[prev][next] + serviceMin;
 }
 
-function twoOpt(order: number[], m: Matrix): number[] {
+export function twoOpt(order: number[], m: Matrix): number[] {
   const o = [...order];
   let improved = true;
   while (improved) {
@@ -60,11 +60,13 @@ export function solve(candidates: Candidate[], m: Matrix, c: Constraints): Solut
   while (remaining.size > 0) {
     if (c.mode === "count" && order.length >= (c.maxStops ?? 0)) break;
     let best: { i: number; pos: number; score: number; cost: number } | null = null;
+    // `remaining` is a Set built from ascending indices, so it iterates in ascending
+    // index order; the strict `>` below means the lowest index wins ties.
     for (const i of remaining) {
       for (let pos = 0; pos <= order.length; pos++) {
         const cost = marginalMin(order, i, pos, m, c.serviceMin);
         const score = candidates[i].priority / Math.max(cost, 1e-6);
-        if (!best || score > best.score + 1e-12 || (Math.abs(score - best.score) <= 1e-12 && i < best.i)) {
+        if (!best || score > best.score + 1e-12) {
           best = { i, pos, score, cost };
         }
       }
