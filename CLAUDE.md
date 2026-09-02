@@ -36,7 +36,7 @@ supabase db push                    # apply migrations to the linked project
 supabase db reset                   # local: drop + reapply (includes the seed block)
 ```
 
-Env: copy `dashboard/.env.example` to `dashboard/.env.local`. `NEXT_PUBLIC_SUPABASE_*` are used by the browser client in `src/lib/supabase.ts`; `RESEND_API_KEY` and `OSRM_BASE_URL` are server-only.
+Env: copy `dashboard/.env.example` to `dashboard/.env.local`. `NEXT_PUBLIC_SUPABASE_*` are used by the browser client in `src/lib/supabase.ts`; `RESEND_API_KEY` (optional), `DISPATCH_FROM_EMAIL` (default `onboarding@resend.dev`) and `OSRM_BASE_URL` (default `https://router.project-osrm.org`) are server-only. `NEXT_PUBLIC_APP_URL` (default `http://localhost:3000`) is the base the dispatch email uses for its `/route/{id}` crew page link, so it has to be reachable by the crew's phone.
 
 ## Next.js 16 note
 
@@ -65,8 +65,9 @@ Spec: `docs/design/DESIGN.md`. **`dashboard/src/app/globals.css` is canonical** 
 
 ## Where things go
 
-- Solver: `dashboard/src/app/api/plan-route/route.ts`. Greedy insertion on `priority / marginal_minutes` + 2-opt over an OSRM `/table` matrix with the depot at index 0. Keep the heuristic pure and testable; the route handler should only do I/O around it.
-- Dispatch email: `dashboard/src/app/api/dispatch/route.ts` (Resend). The crew page link is primary; GMaps deep links are chunked per leg because of waypoint limits.
+- Solver: `dashboard/src/lib/server/planRoute.ts`, behind the thin handler at `dashboard/src/app/api/plan-route/route.ts`. Greedy insertion on `priority / marginal_minutes` + 2-opt over an OSRM `/table` matrix with the depot at index 0. The pure logic and its tests live in `src/lib/server/`; handlers only parse, inject I/O and map errors to status codes.
+- Replanning a crew's day replaces that `(crew_id, plan_date)` plan: set its work orders to `cancelled`, reset each freed pothole to `confirmed` (only where no other open work order holds it — the `work_orders_sync` trigger moves potholes *into* `scheduled` but never back), then delete the work orders and the plan before inserting the new one.
+- Dispatch email: `dashboard/src/lib/server/dispatch.ts`, behind `dashboard/src/app/api/dispatch/route.ts` (Resend, wrapped in a `Mailer` interface so tests never send). The crew page link is primary; GMaps deep links are chunked per leg (at most 8 waypoints) because of waypoint limits, and are the one place that is `lat,lng`. Without `RESEND_API_KEY` the plan is still published and the response says `sent: false`.
 - Crew page: `dashboard/src/app/route/[id]/page.tsx`. Mobile-first, no auth, PATCHes `work_orders` only.
 - Realtime: subscribe to `public.potholes` (all events) and `public.vehicle_positions` (INSERT). Payloads carry raw geography, so on a pothole change re-fetch that row from `potholes_map`.
 - Security is intentionally absent (`demo_all` RLS policies, public storage bucket). Don't spend time hardening; do keep `authority_id` on anything new so tenancy is a policy change later.
@@ -74,4 +75,4 @@ Spec: `docs/design/DESIGN.md`. **`dashboard/src/app/globals.css` is canonical** 
 - Console state: `dashboard/src/lib/console/store.ts` (zustand). Everything on the screen reads from it, so the map and the column can never disagree. Derivations, formatting, keyboard, area maths and the vehicle tween are the other pure modules beside it, each with a test file. Spec: `docs/superpowers/specs/2026-09-02-console-map-design.md`.
 - Route planner UI: `dashboard/src/components/DispatchSheet.tsx` — crew, mode (`manual` / `count` / `time`), stop and time budgets, service minutes, the drawn area, the plan result and the real dispatch, all in one modal. It is the only interrupting surface in the product; do not add a second.
 - Data layer: `dashboard/src/lib/data/` behind `createDataSource()` in `index.ts` — the synthetic fleet by default, Supabase when `NEXT_PUBLIC_SUPABASE_URL` is set. Components never import a Supabase client.
-- The `/api/plan-route` handler should call `solve()` from `dashboard/src/lib/solver/heuristic.ts` with the OSRM matrix (depot at index 0); the synthetic data source already does this with a haversine matrix.
+- `planRoute()` calls `solve()` from `dashboard/src/lib/solver/heuristic.ts` with the OSRM matrix (depot at index 0); the synthetic data source already does this with a haversine matrix. Server-only helpers it shares with dispatch: `src/lib/server/supabase.ts` (`serverClient()`), `src/lib/server/wkb.ts` (`parsePointWkb`, for `crews.depot`), `src/lib/server/osrm.ts`.
