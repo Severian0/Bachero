@@ -46,7 +46,7 @@ describe("synthetic source", () => {
     const ds = createSyntheticSource();
     const { potholes, crews } = await ds.load();
     const onPothole = vi.fn();
-    ds.subscribe({ onPothole, onVehiclePosition: vi.fn() });
+    ds.subscribe({ onPothole, onVehicle: vi.fn() });
     const open = potholes.filter((p) => p.status === "confirmed").slice(0, 4);
     const res = await ds.planRoute({ crew_id: crews[0].id, plan_date: "2026-09-03", mode: "manual", pothole_ids: open.map((p) => p.id), service_min_per_stop: 20 });
     expect(res.stops.map((s) => s.stop_order)).toEqual([1, 2, 3, 4]);
@@ -67,17 +67,30 @@ describe("synthetic source", () => {
       expect(s.lat).toBeLessThanOrEqual(51.499);
     }
   });
-  it("subscribe emits vehicle positions on a timer and stops on unsubscribe", async () => {
+  it("subscribe emits vehicles on a timer and stops on unsubscribe", async () => {
     vi.useFakeTimers();
     const ds = createSyntheticSource();
     await ds.load();
-    const onVehiclePosition = vi.fn();
-    const off = ds.subscribe({ onPothole: vi.fn(), onVehiclePosition });
+    const onVehicle = vi.fn();
+    const off = ds.subscribe({ onPothole: vi.fn(), onVehicle });
     vi.advanceTimersByTime(1200 * 3);
-    expect(onVehiclePosition).toHaveBeenCalledTimes(9);
+    expect(onVehicle).toHaveBeenCalledTimes(9);
     off();
     vi.advanceTimersByTime(1200);
-    expect(onVehiclePosition).toHaveBeenCalledTimes(9);
+    expect(onVehicle).toHaveBeenCalledTimes(9);
+    vi.useRealTimers();
+  });
+
+  it("subscribe emits an onKmToday total that grows by KM_PER_TICK each tick", async () => {
+    vi.useFakeTimers();
+    const ds = createSyntheticSource();
+    const { kmToday: start } = await ds.load();
+    const onKmToday = vi.fn();
+    const off = ds.subscribe({ onPothole: vi.fn(), onVehicle: vi.fn(), onKmToday });
+    vi.advanceTimersByTime(1200 * 2);
+    expect(onKmToday).toHaveBeenCalledTimes(2);
+    expect(onKmToday.mock.calls[1][0]).toBeCloseTo(start + 0.11 * 2, 6);
+    off();
     vi.useRealTimers();
   });
 });

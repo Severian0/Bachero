@@ -50,7 +50,9 @@ export interface LoadResult {
 
 export interface SubscribeHandlers {
   onPothole(p: PotholeUpdate): void;
-  onVehiclePosition(v: VehiclePosition): void;
+  onVehicle(v: Vehicle): void;
+  /** Synthetic-only: the source's own running km-today total after a tick. */
+  onKmToday?(km: number): void;
 }
 
 export interface ConsoleDataSource {

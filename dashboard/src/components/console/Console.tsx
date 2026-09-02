@@ -18,10 +18,11 @@ export default function Console() {
   const { drawing, draft, handlers } = useAreaDrag();
 
   useEffect(() => {
+    if (drawing) return;
     const onKey = (e: KeyboardEvent) => { handleKey(e, useConsole.getState(), rows); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows]);
+  }, [rows, drawing]);
 
   useEffect(() => {
     const st = useConsole.getState();
@@ -45,7 +46,8 @@ export default function Console() {
       if (cancelled) return;
       off = ds.subscribe({
         onPothole: (u) => ("deleted" in u ? st.removePothole(u.id) : st.upsertPothole(u)),
-        onVehiclePosition: (v) => { st.pushVehiclePosition(v); st.setKmToday(useConsole.getState().kmToday + 0.11 / 3); },
+        onVehicle: (v) => st.upsertVehicle(v),
+        onKmToday: (km) => st.setKmToday(km),
       });
     })();
     return () => { cancelled = true; off(); };

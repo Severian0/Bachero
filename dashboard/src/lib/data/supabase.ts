@@ -58,7 +58,7 @@ export function createSupabaseSource(client: SupabaseClient): ConsoleDataSource 
       return { potholes, vehicles, crews, kmToday };
     },
 
-    subscribe({ onPothole, onVehiclePosition }) {
+    subscribe({ onPothole, onVehicle }) {
       const channel = client.channel("map")
         .on("postgres_changes", { event: "*", schema: "public", table: "potholes" }, async (payload) => {
           if (payload.eventType === "DELETE") { onPothole({ id: (payload.old as { id: string }).id, deleted: true }); return; }
@@ -70,7 +70,7 @@ export function createSupabaseSource(client: SupabaseClient): ConsoleDataSource 
           const vid = (payload.new as { vehicle_id: string }).vehicle_id;
           const { data } = await client.from("latest_vehicle_positions").select("*").eq("vehicle_id", vid);
           const row = data?.[0] as VehiclePositionRow | undefined;
-          if (row) onVehiclePosition(toVehicle(row).position);
+          if (row) onVehicle(toVehicle(row));
         })
         .subscribe();
       return () => { void client.removeChannel(channel); };

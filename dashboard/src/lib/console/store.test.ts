@@ -153,13 +153,42 @@ describe("console store", () => {
     expect(s.getState().planError).toBe("Route service unavailable. The queue is unaffected; try again.");
   });
 
-  it("pushVehiclePosition keeps a trail of at most 5", () => {
+  it("upsertVehicle keeps a trail of at most 5", () => {
     const s = createConsoleStore();
     s.getState().setVehicles([{ id: "v", label: "Bus 24", fleet_type: "bus", position: { vehicle_id: "v", lng: 0, lat: 0, recorded_at: "t0", speed_mps: null, heading_deg: null }, trail: [] }]);
-    for (let i = 1; i <= 7; i++) s.getState().pushVehiclePosition({ vehicle_id: "v", lng: i, lat: 0, recorded_at: "t" + i, speed_mps: null, heading_deg: null });
+    for (let i = 1; i <= 7; i++) {
+      const position = { vehicle_id: "v", lng: i, lat: 0, recorded_at: "t" + i, speed_mps: null, heading_deg: null };
+      s.getState().upsertVehicle({ id: "v", label: "Bus 24", fleet_type: "bus", position, trail: [position] });
+    }
     const v = s.getState().vehicles["v"];
     expect(v.position.lng).toBe(7);
     expect(v.trail).toHaveLength(5);
     expect(v.trail[4].lng).toBe(7);
+  });
+
+  it("upsertVehicle inserts a vehicle absent from the initial load", () => {
+    const s = createConsoleStore();
+    expect(s.getState().vehicles["new"]).toBeUndefined();
+    const position = { vehicle_id: "new", lng: 1, lat: 2, recorded_at: "t0", speed_mps: null, heading_deg: null };
+    s.getState().upsertVehicle({ id: "new", label: "Phone C", fleet_type: "pool_car", position, trail: [position] });
+    expect(s.getState().vehicles["new"]).toMatchObject({ label: "Phone C", fleet_type: "pool_car", position });
+  });
+
+  it("upsertPothole invalidates the detections cache and reloads it for the pinned pothole", async () => {
+    const rows = [{ id: "d1", pothole_id: "a", vehicle_id: "v", vehicle_label: "Bus", recorded_at: "2026-09-01T00:00:00Z", severity: 0.4, speed_mps: 5, photo_url: null }];
+    const detections = vi.fn(async () => rows);
+    const ds = fakeDs({ detections });
+    const s = createConsoleStore();
+    s.getState().setDataSource(ds);
+    s.getState().upsertPothole(base);
+    s.getState().pin("a");
+    await vi.runAllTimersAsync();
+    expect(detections).toHaveBeenCalledTimes(1);
+    expect(s.getState().detections["a"]).toEqual(rows);
+
+    s.getState().upsertPothole(p({ severity: 0.9 }));
+    await vi.runAllTimersAsync();
+    expect(detections).toHaveBeenCalledTimes(2);
+    expect(s.getState().detections["a"]).toEqual(rows);
   });
 });

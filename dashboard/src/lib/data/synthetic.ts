@@ -138,8 +138,9 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
           v.i += v.dir;
           if (v.i >= v.path.length - 1) { v.i = v.path.length - 1; v.dir = -1; }
           else if (v.i <= 0) { v.i = 0; v.dir = 1; }
-          h.onVehiclePosition(vehicle(v).position);
+          h.onVehicle(vehicle(v));
         }
+        h.onKmToday?.(kmToday);
       }, TICK_MS);
       return () => { clearInterval(timer); handlers.delete(h); };
     },

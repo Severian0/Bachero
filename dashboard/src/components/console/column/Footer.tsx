@@ -1,8 +1,10 @@
 "use client";
 import { useConsole } from "@/lib/console/store";
+import { countInArea } from "@/lib/console/area";
 
 export function Footer() {
   const selected = useConsole((s) => s.selected);
+  const potholes = useConsole((s) => s.potholes);
   const crews = useConsole((s) => s.crews);
   const planner = useConsole((s) => s.planner);
   const plannerOpen = useConsole((s) => s.plannerOpen);
@@ -13,7 +15,9 @@ export function Footer() {
   const n = selected.length;
   const mins = n * planner.serviceMinPerStop + Math.round(n * 6.5);
   const crew = crews.find((c) => c.id === planner.crewId);
-  const canPlan = planner.mode !== "manual" || n > 0;
+  const openCount = Object.values(potholes).filter((p) => p.status === "suspected" || p.status === "confirmed").length;
+  const candidates = planner.mode === "manual" ? n : planner.area ? countInArea(Object.values(potholes), planner.area) : openCount;
+  const canPlan = candidates > 0;
   const label = planState === "planning" ? "Planning…" : "Plan route";
 
   return (

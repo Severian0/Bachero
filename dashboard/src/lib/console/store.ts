@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type {
-  ConsoleDataSource, Crew, Detection, PlanRouteRequest, PlanRouteResponse, Pothole, Vehicle, VehiclePosition,
+  ConsoleDataSource, Crew, Detection, PlanRouteRequest, PlanRouteResponse, Pothole, Vehicle,
 } from "@/lib/data/types";
 import { FILTER_CYCLE, isSelectable, type Filter } from "./derive";
 
@@ -54,7 +54,7 @@ export interface ConsoleActions {
   upsertPothole(p: Pothole): void;
   removePothole(id: string): void;
   setVehicles(v: Vehicle[]): void;
-  pushVehiclePosition(v: VehiclePosition): void;
+  upsertVehicle(v: Vehicle): void;
   setCrews(c: Crew[]): void;
   setKmToday(km: number): void;
   loadDetections(id: string): Promise<void>;
@@ -121,10 +121,16 @@ export function createConsoleStore() {
       setLoadState(loadState, loadError) { set({ loadState, loadError }); },
       setAll(list) { set({ potholes: Object.fromEntries(list.map((p) => [p.id, p])) }); },
       upsertPothole(p) {
-        set((s) => ({
-          potholes: { ...s.potholes, [p.id]: p },
-          selected: isSelectable(p) ? s.selected : s.selected.filter((id) => id !== p.id),
-        }));
+        set((s) => {
+          const detections = { ...s.detections };
+          delete detections[p.id];
+          return {
+            potholes: { ...s.potholes, [p.id]: p },
+            selected: isSelectable(p) ? s.selected : s.selected.filter((id) => id !== p.id),
+            detections,
+          };
+        });
+        if (p.id === get().pinnedId) void get().loadDetections(p.id);
       },
       removePothole(id) {
         set((s) => {
@@ -139,12 +145,12 @@ export function createConsoleStore() {
         });
       },
       setVehicles(list) { set({ vehicles: Object.fromEntries(list.map((v) => [v.id, v])) }); },
-      pushVehiclePosition(pos) {
+      upsertVehicle(v) {
         set((s) => {
-          const v = s.vehicles[pos.vehicle_id];
-          if (!v) return {};
-          const trail = [...v.trail, pos].slice(-TRAIL_LEN);
-          return { vehicles: { ...s.vehicles, [v.id]: { ...v, position: pos, trail } } };
+          const existing = s.vehicles[v.id];
+          if (!existing) return { vehicles: { ...s.vehicles, [v.id]: v } };
+          const trail = [...existing.trail, v.position].slice(-TRAIL_LEN);
+          return { vehicles: { ...s.vehicles, [v.id]: { ...existing, position: v.position, trail } } };
         });
       },
       setCrews(crews) {
@@ -243,6 +249,8 @@ export function createConsoleStore() {
         if (!pending) return;
         if (dismissTimer) clearTimeout(dismissTimer);
         dismissTimer = null;
+        // Selection is intentionally not restored here: dismiss() already dropped the id
+        // from `selected`, and undo only reverses the status change, not the deselection.
         set((s) => ({ potholes: { ...s.potholes, [pending.id]: pending.previous }, pendingDismiss: null }));
       },
     };

@@ -18,9 +18,16 @@ export function useAreaDrag() {
     start.current = [e.lngLat.lng, e.lngLat.lat];
     setDrawing(true);
     setDraft(null);
-    const onKey = (k: KeyboardEvent) => { if (k.key === "Escape") { start.current = null; setDrawing(false); setDraft(null); onKeyRef.current = null; } };
+    const onKey = (k: KeyboardEvent) => {
+      if (k.key !== "Escape") return;
+      window.removeEventListener("keydown", onKey);
+      onKeyRef.current = null;
+      start.current = null;
+      setDrawing(false);
+      setDraft(null);
+    };
     onKeyRef.current = onKey;
-    window.addEventListener("keydown", onKey, { once: true });
+    window.addEventListener("keydown", onKey);
   }, []);
 
   const onMouseMove = useCallback((e: MapLayerMouseEvent) => {
