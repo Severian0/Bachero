@@ -51,6 +51,18 @@ const VEHICLES: { id: string; label: string; fleet_type: string; path: LngLat[] 
     path: [[-0.137, 51.5013], [-0.134, 51.501], [-0.131, 51.5005], [-0.1305, 51.4998], [-0.1345, 51.4995]] },
 ];
 
+// Attribution pool for detections: the three moving VEHICLES plus three stationary
+// entries so a pothole's evidence can name up to six distinct vehicles even though
+// only three move on the map.
+const DETECTION_FLEET: { id: string; label: string }[] = [
+  { id: "00000000-0000-0000-0000-000000000002", label: "Phone A (bus 24)" },
+  { id: "00000000-0000-0000-0000-000000000004", label: "Phone B (bin round N)" },
+  { id: "00000000-0000-0000-0000-000000000007", label: "Pool car 3" },
+  { id: "00000000-0000-0000-0000-000000000008", label: "Bus 11" },
+  { id: "00000000-0000-0000-0000-000000000009", label: "Sweeper 2" },
+  { id: "00000000-0000-0000-0000-00000000000a", label: "Gritter 1" },
+];
+
 const CREWS: Crew[] = [
   { id: "00000000-0000-0000-0000-000000000006", authority_id: AUTHORITY_ID, name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 },
 ];
@@ -105,8 +117,8 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
     potholes.set(id, p);
     const rows: Detection[] = Array.from({ length: passes }, (_, k) => ({
       id: uuidFrom(rng), pothole_id: id,
-      vehicle_id: VEHICLES[k % vehicles % VEHICLES.length].id,
-      vehicle_label: VEHICLES[k % vehicles % VEHICLES.length].label,
+      vehicle_id: DETECTION_FLEET[k % vehicles].id,
+      vehicle_label: DETECTION_FLEET[k % vehicles].label,
       recorded_at: new Date(new Date(first).getTime() + (k / passes) * (now - new Date(first).getTime())).toISOString(),
       severity: Math.max(0, Math.min(1, severity - rng() * 0.3)),
       speed_mps: 4 + rng() * 9, photo_url: null,

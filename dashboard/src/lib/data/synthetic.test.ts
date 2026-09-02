@@ -25,6 +25,15 @@ describe("synthetic source", () => {
       if (p.status === "confirmed") expect(p.distinct_vehicles).toBeGreaterThanOrEqual(2);
     }
   });
+  it("detections name exactly distinct_vehicles distinct vehicle ids", async () => {
+    const ds = createSyntheticSource();
+    const { potholes } = await ds.load();
+    for (const p of potholes) {
+      const rows = await ds.detections(p.id);
+      const distinct = new Set(rows.map((d) => d.vehicle_id));
+      expect(distinct.size).toBe(p.distinct_vehicles);
+    }
+  });
   it("detections match detection_count and carry the pothole id", async () => {
     const ds = createSyntheticSource();
     const { potholes } = await ds.load();
