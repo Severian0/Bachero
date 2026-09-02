@@ -295,3 +295,16 @@
   background: var(--color-accent);
   animation: bch-breathe 2.4s ease-in-out infinite;
 }
+
+/* MapLibre controls restyled to the tokens. */
+.maplibregl-ctrl-scale {
+  margin: 0 var(--space-6) var(--space-6) 0;
+  padding: 2px var(--space-3) var(--space-2);
+  border: 0; border-bottom: 2px solid var(--ink-45);
+  background: var(--color-bg); box-shadow: var(--shadow-sm); border-radius: var(--radius-md);
+  font: 11px/1.4 var(--font-body); color: var(--ink-58); font-variant-numeric: tabular-nums;
+}
+.maplibregl-ctrl-attrib { font: 10px/1.4 var(--font-body); background: color-mix(in srgb, var(--color-bg) 85%, transparent); }
+.maplibregl-ctrl-attrib a { color: var(--ink-55); }
+.maplibregl-map { font-family: var(--font-body); }
+.maplibregl-marker { will-change: transform; }
