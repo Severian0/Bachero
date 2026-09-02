@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createConsoleStore, DISMISS_UNDO_MS } from "./store";
+import { createConsoleStore, DISMISS_UNDO_MS, EMPTY_PLAN_ERROR } from "./store";
 import type { ConsoleDataSource, Pothole } from "@/lib/data/types";
 
 const base: Pothole = {
@@ -17,7 +17,7 @@ function fakeDs(over: Partial<ConsoleDataSource> = {}): ConsoleDataSource {
     subscribe: vi.fn(() => () => {}),
     detections: vi.fn(async () => []),
     dismiss: vi.fn(async () => {}),
-    planRoute: vi.fn(async () => ({ route_plan_id: "r1", stops: [], total_km: 1, total_minutes: 2, baseline_km: 3, path: { type: "LineString" as const, coordinates: [] } })),
+    planRoute: vi.fn(async () => ({ route_plan_id: "r1", stops: [{ work_order_id: "w1", pothole_id: "a", stop_order: 1, eta: "2026-09-03T08:20:00.000Z", lng: -0.12, lat: 51.49, severity: 0.5, photo_url: null }], total_km: 1, total_minutes: 2, baseline_km: 3, path: { type: "LineString" as const, coordinates: [] } })),
     dispatch: vi.fn(async () => {}),
     ...over,
   };
@@ -30,8 +30,8 @@ describe("console store", () => {
   it("link, pin, unpin, unlink", () => {
     const s = createConsoleStore();
     s.getState().upsertPothole(base);
-    s.getState().link("a", "row");
-    expect(s.getState()).toMatchObject({ linkedId: "a", linkSource: "row" });
+    s.getState().link("a");
+    expect(s.getState().linkedId).toBe("a");
     s.getState().pin("a");
     expect(s.getState().pinnedId).toBe("a");
     s.getState().unpin();
@@ -180,6 +180,22 @@ describe("console store", () => {
     expect(s.getState().planCrewId).toBe("A");
     s.getState().resetPlan();
     expect(s.getState().planCrewId).toBeNull();
+  });
+
+  it("a plan with no stops is an error, and leaves the selection to be adjusted", async () => {
+    const ds = fakeDs({
+      planRoute: vi.fn(async () => ({ route_plan_id: "r1", stops: [], total_km: 0, total_minutes: 0, baseline_km: 0, path: { type: "LineString" as const, coordinates: [] } })),
+    });
+    const s = createConsoleStore();
+    s.getState().setDataSource(ds);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().upsertPothole(base);
+    s.getState().toggleSelected("a");
+    await s.getState().planRoute();
+    expect(s.getState().planState).toBe("error");
+    expect(s.getState().planError).toBe(EMPTY_PLAN_ERROR);
+    expect(s.getState().plan).toBeNull();
+    expect(s.getState().selected).toEqual(["a"]);
   });
 
   it("planRoute failure stores one sentence and returns to idle", async () => {

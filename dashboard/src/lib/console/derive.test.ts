@@ -53,13 +53,13 @@ describe("filters and stats", () => {
     p({ id: "d", status: "repaired" }),
     p({ id: "e", status: "false_positive" }),
   ];
-  it("open = suspected + confirmed; all excludes false_positive", () => {
-    expect(list.filter((x) => matchesFilter(x, "open")).map((x) => x.id)).toEqual(["a", "b"]);
+  it("all excludes false_positive; a status chip shows only that status", () => {
     expect(list.filter((x) => matchesFilter(x, "all")).map((x) => x.id)).toEqual(["a", "b", "c", "d"]);
+    expect(list.filter((x) => matchesFilter(x, "confirmed")).map((x) => x.id)).toEqual(["b"]);
     expect(list.filter((x) => matchesFilter(x, "scheduled")).map((x) => x.id)).toEqual(["c"]);
   });
   it("visibleRows sorts by priority desc", () => {
-    expect(visibleRows(list, "open").map((x) => x.id)).toEqual(["b", "a"]);
+    expect(visibleRows(list, "all").map((x) => x.id)).toEqual(["b", "c", "d", "a"]);
   });
   it("stats count confirmed-open, suspected, scheduled", () => {
     expect(stats(list)).toEqual({ confirmedOpen: 1, suspected: 1, scheduled: 1 });

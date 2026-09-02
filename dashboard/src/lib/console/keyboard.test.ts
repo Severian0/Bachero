@@ -11,12 +11,12 @@ const mk = (id: string, status: Pothole["status"] = "confirmed"): Pothole => ({
 const ev = (key: string, tag = "DIV") => ({ key, target: { tagName: tag } as unknown as EventTarget, preventDefault() {} });
 
 describe("handleKey", () => {
-  it("arrows move the link through rows with source keys", () => {
+  it("arrows move the link through the rows", () => {
     const s = createConsoleStore();
     const rows = [mk("a"), mk("b"), mk("c")];
     rows.forEach((p) => s.getState().upsertPothole(p));
     expect(handleKey(ev("ArrowDown"), s.getState(), rows)).toBe(true);
-    expect(s.getState()).toMatchObject({ linkedId: "a", linkSource: "keys" });
+    expect(s.getState().linkedId).toBe("a");
     handleKey(ev("ArrowDown"), s.getState(), rows);
     handleKey(ev("ArrowDown"), s.getState(), rows);
     handleKey(ev("ArrowDown"), s.getState(), rows);
@@ -29,7 +29,7 @@ describe("handleKey", () => {
     const rows = [mk("a")];
     s.getState().upsertPothole(rows[0]);
     expect(handleKey(ev("Enter"), s.getState(), rows)).toBe(false);
-    s.getState().link("a", "keys");
+    s.getState().link("a");
     expect(handleKey(ev("Enter"), s.getState(), rows)).toBe(true);
     expect(s.getState().pinnedId).toBe("a");
     expect(s.getState().selected).toEqual([]);

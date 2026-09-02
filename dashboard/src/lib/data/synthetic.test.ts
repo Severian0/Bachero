@@ -55,6 +55,29 @@ describe("synthetic source", () => {
     const scheduled = onPothole.mock.calls.map((c) => c[0]).filter((p) => p.status === "scheduled");
     expect(scheduled).toHaveLength(4);
   });
+  it("re-planning manually over a subset keeps the surviving stops and releases the dropped one", async () => {
+    const ds = createSyntheticSource();
+    const { potholes, crews } = await ds.load();
+    const onPothole = vi.fn();
+    ds.subscribe({ onPothole, onVehicle: vi.fn() });
+    const three = potholes.filter((p) => p.status === "confirmed").slice(0, 3);
+    const first = await ds.planRoute({ crew_id: crews[0].id, plan_date: "2026-09-03", mode: "manual", pothole_ids: three.map((p) => p.id), service_min_per_stop: 20 });
+    expect(first.stops).toHaveLength(3);
+
+    // The stops are `scheduled` now. Re-planning without one of them is exactly
+    // what "Remove" does in the sheet, and it must not empty the route.
+    const dropped = first.stops[1].pothole_id;
+    const keep = first.stops.filter((st) => st.pothole_id !== dropped).map((st) => st.pothole_id);
+    onPothole.mockClear();
+    const second = await ds.planRoute({ crew_id: crews[0].id, plan_date: "2026-09-03", mode: "manual", pothole_ids: keep, service_min_per_stop: 20 });
+    expect(second.stops).toHaveLength(2);
+    expect(second.stops.map((st) => st.stop_order)).toEqual([1, 2]);
+    expect(second.stops.map((st) => st.pothole_id).sort()).toEqual([...keep].sort());
+
+    const released = onPothole.mock.calls.map((c) => c[0]).filter((p) => p.id === dropped);
+    expect(released).toHaveLength(1);
+    expect(released[0]).toMatchObject({ status: "confirmed", stop_order: null });
+  });
   it("count mode with an area only considers potholes inside it", async () => {
     const ds = createSyntheticSource();
     const { crews } = await ds.load();

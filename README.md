@@ -47,7 +47,7 @@ npm install
 npm run dev                    # http://localhost:3000
 ```
 
-With no `.env.local` the console runs on a synthetic fleet instead of Supabase — a full demo with moving vehicles, arriving detections and a working planner, no backend required. Supabase takes over as soon as `NEXT_PUBLIC_SUPABASE_URL` is set.
+With no `.env.local` the console runs on a synthetic fleet instead of Supabase: three vehicles glide along their routes, the network-scanned figure climbs, and the queue, the record panel, the planner and dispatch all work end to end, no backend required. No new detections arrive in synthetic mode, so the suspected-to-confirmed beat needs a Supabase project. Supabase takes over as soon as `NEXT_PUBLIC_SUPABASE_URL` is set.
 
 Other commands: `npm run build`, `npm run lint`, `npm run typecheck`, `npm test`.
 

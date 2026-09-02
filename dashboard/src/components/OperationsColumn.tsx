@@ -28,6 +28,10 @@ export default function OperationsColumn({
   kmToday,
   estimatedMinutes,
   crewName,
+  areaCount,
+  loadState,
+  loadError,
+  onRetry,
   canPlan,
   planning,
   planned,
@@ -47,6 +51,11 @@ export default function OperationsColumn({
   /** The console's own estimate for the current selection, before a plan. */
   estimatedMinutes: number;
   crewName: string;
+  /** Open potholes inside the drawn plan area, or `null` when none is drawn. */
+  areaCount: number | null;
+  loadState: "loading" | "ready" | "error";
+  loadError?: string;
+  onRetry: () => void;
   canPlan: boolean;
   planning: boolean;
   planned: PlannedRoute | null;
@@ -119,10 +128,29 @@ export default function OperationsColumn({
       </div>
 
       <div ref={listRef} style={{ overflowY: "auto", minHeight: 0 }}>
-        {rows.length === 0 ? (
-          <p className="secondary" style={{ padding: "var(--s5) var(--s4)", margin: 0, fontSize: "var(--t-small)" }}>
-            Nothing matches this filter. Choose All to see the whole queue.
-          </p>
+        {loadState === "error" ? (
+          <div style={{ display: "grid", gap: "var(--s3)", justifyItems: "start", padding: "var(--s5) var(--s4)" }}>
+            <p className="secondary" style={{ margin: 0, fontSize: "var(--t-small)" }}>
+              Could not load the queue. {loadError}
+            </p>
+            <button type="button" className="btn btn-secondary" onClick={onRetry}>
+              Retry
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
+          // An empty queue and a queue that has not arrived yet are different
+          // facts. Only the first gets a sentence; the second holds the space.
+          loadState === "ready" ? (
+            <p className="secondary" style={{ padding: "var(--s5) var(--s4)", margin: 0, fontSize: "var(--t-small)" }}>
+              Nothing matches this filter. Choose All to see the whole queue.
+            </p>
+          ) : (
+            <div aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <div key={i} style={{ height: 58, borderBottom: "1px solid var(--rule-soft)" }} />
+              ))}
+            </div>
+          )
         ) : (
           <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {rows.map((r) => (
@@ -152,6 +180,13 @@ export default function OperationsColumn({
           <p className="secondary" style={{ margin: 0, fontSize: "var(--t-small)" }}>
             {planned ? (
               <Clear onClearRoute={onClearRoute} />
+            ) : areaCount !== null ? (
+              // Drawing an area switches the planner to Best N. Say so here, or
+              // the only evidence of the change is a rectangle on the map.
+              <>
+                Area drawn · <span className="data">{areaCount}</span> in area · Best N ·{" "}
+                <Clear onClearRoute={onClearRoute} />
+              </>
             ) : n === 0 ? (
               "Open a record to add it."
             ) : (
@@ -163,7 +198,7 @@ export default function OperationsColumn({
           </p>
         </div>
         <button type="button" className="btn btn-primary" disabled={!canPlan || planning} onClick={onPlanRoute}>
-          {planning ? "Planning…" : "Plan route"}
+          {planning ? "Planning…" : planned ? "Open route" : "Plan route"}
         </button>
       </div>
     </div>

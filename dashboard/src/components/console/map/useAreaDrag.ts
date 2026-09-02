@@ -51,7 +51,8 @@ export function useAreaDrag() {
     setDrawing(false);
     setDraft(null);
     setArea(poly);
-    useConsole.getState().setPlannerOpen(true);
+    // An area is a statement about where, so the planner stops asking which.
+    // The column reports the switch in its bottom bar; nothing opens on release.
     if (useConsole.getState().planner.mode === "manual") useConsole.getState().setPlanner({ mode: "count" });
   }, [setArea, setDrawing]);
 

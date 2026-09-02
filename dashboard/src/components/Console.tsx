@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Header from "./Header";
 import PotholeMap from "./PotholeMap";
 import OperationsColumn, { type PlannedRoute } from "./OperationsColumn";
@@ -11,7 +11,9 @@ import { handleKey } from "@/lib/console/keyboard";
 import {
   displayName, estimateMinutes, planCandidates, stats, visibleRows, type ChipFilter,
 } from "@/lib/console/derive";
+import { countInArea } from "@/lib/console/area";
 import { createDataSource, isSupabaseConfigured } from "@/lib/data";
+import type { ConsoleDataSource } from "@/lib/data/types";
 
 /**
  * The console. One screen: the fleet's evidence on the left, the repair queue
@@ -39,6 +41,7 @@ export default function Console() {
   const plan = useConsole((s) => s.plan);
   const pendingDismiss = useConsole((s) => s.pendingDismiss);
   const loadState = useConsole((s) => s.loadState);
+  const loadError = useConsole((s) => s.loadError);
 
   const link = useConsole((s) => s.link);
   const unlink = useConsole((s) => s.unlink);
@@ -51,10 +54,7 @@ export default function Console() {
   const dismiss = useConsole((s) => s.dismiss);
   const undoDismiss = useConsole((s) => s.undoDismiss);
   const resetPlan = useConsole((s) => s.resetPlan);
-
-  // The store's `open` grouping has no chip of its own in this column; it is
-  // the whole queue minus what has been closed, which reads as All.
-  const filterKey: ChipFilter = filter === "open" ? "all" : filter;
+  const setArea = useConsole((s) => s.setArea);
 
   const all = useMemo(() => Object.values(potholes), [potholes]);
   const rows = useMemo(() => visibleRows(all, filter), [all, filter]);
@@ -106,13 +106,22 @@ export default function Console() {
     [all, planner.mode, planner.area, selected.length],
   );
   const crewName = crews.find((c) => c.id === planner.crewId)?.name ?? "—";
+  // How many open potholes a drawn area holds, so the column can say what the
+  // rectangle did rather than leaving the mode switch to be discovered later.
+  const areaCount = useMemo(
+    () => (planner.area ? countInArea(all, planner.area) : null),
+    [all, planner.area],
+  );
 
-  const linkFromRow = useCallback((id: string | null) => (id ? link(id, "row") : unlink()), [link, unlink]);
+  const linkFromRow = useCallback((id: string | null) => (id ? link(id) : unlink()), [link, unlink]);
 
+  // Clear puts the bottom bar back to nothing committed: the selection, the
+  // standing plan and the drawn area all go, because all three feed it.
   const clearRoute = useCallback(() => {
     clearSelection();
+    setArea(null);
     if (planState === "planned") resetPlan();
-  }, [clearSelection, planState, resetPlan]);
+  }, [clearSelection, setArea, planState, resetPlan]);
 
   // Keyboard is first class. The linked row and the linked pin are the same
   // idea as focus, so the arrow keys move both at once. The sheet is modal and
@@ -125,16 +134,20 @@ export default function Console() {
     return () => window.removeEventListener("keydown", onKey);
   }, [rows, sheetOpen, drawing]);
 
+  // A failed load has to be recoverable without a page reload, so the load
+  // sequence is held here rather than inlined in the effect, and the column
+  // gets a way to run it again against the same source.
+  const reloadRef = useRef<(() => void) | null>(null);
+  const retry = useCallback(() => reloadRef.current?.(), []);
+
   // The live data source: Supabase where it is configured, the synthetic fleet
   // otherwise. Mounted once, and the subscription is torn down with the screen.
   useEffect(() => {
     const st = useConsole.getState();
     let off = () => {};
     let cancelled = false;
-    (async () => {
-      const ds = await createDataSource();
-      if (cancelled) return;
-      st.setDataSource(ds);
+    const loadAll = async (ds: ConsoleDataSource) => {
+      st.setLoadState("loading");
       try {
         const res = await ds.load();
         if (cancelled) return;
@@ -144,8 +157,16 @@ export default function Console() {
         st.setKmToday(res.kmToday);
         st.setLoadState("ready");
       } catch (e) {
+        if (cancelled) return;
         st.setLoadState("error", e instanceof Error ? e.message : "Unknown error");
       }
+    };
+    (async () => {
+      const ds = await createDataSource();
+      if (cancelled) return;
+      st.setDataSource(ds);
+      reloadRef.current = () => void loadAll(ds);
+      await loadAll(ds);
       if (cancelled) return;
       off = ds.subscribe({
         onPothole: (u) => ("deleted" in u ? st.removePothole(u.id) : st.upsertPothole(u)),
@@ -153,7 +174,7 @@ export default function Console() {
         onKmToday: (km) => st.setKmToday(km),
       });
     })();
-    return () => { cancelled = true; off(); };
+    return () => { cancelled = true; off(); reloadRef.current = null; };
   }, []);
 
   return (
@@ -182,7 +203,7 @@ export default function Console() {
             <OperationsColumn
               rows={rows}
               counts={counts}
-              filter={filterKey}
+              filter={filter}
               onFilter={setFilter}
               linkedId={linkedId}
               routeIds={routeIds}
@@ -191,7 +212,11 @@ export default function Console() {
               kmToday={kmToday}
               estimatedMinutes={estimateMinutes(selected.length, planner.serviceMinPerStop)}
               crewName={crewName}
-              canPlan={candidates > 0}
+              areaCount={areaCount}
+              loadState={loadState}
+              loadError={loadError}
+              onRetry={retry}
+              canPlan={candidates > 0 || planState === "planned"}
               planning={planState === "planning"}
               planned={planned}
               onPlanRoute={() => setSheetOpen(true)}

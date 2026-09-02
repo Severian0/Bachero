@@ -3,13 +3,13 @@ import type { PotholeStatus } from "@/lib/types";
 import { countInArea } from "./area";
 import { coord, plural } from "./format";
 
-export type Filter = "open" | "suspected" | "confirmed" | "scheduled" | "all";
-/** The four the column offers as chips. `open` is a grouping with no chip. */
-export type ChipFilter = Exclude<Filter, "open">;
+export type Filter = "suspected" | "confirmed" | "scheduled" | "all";
+/** Every filter has a chip; the two names are kept apart only for readability. */
+export type ChipFilter = Filter;
 /** Chip order, and the order the f key steps through. */
 export const FILTER_CYCLE: ChipFilter[] = ["all", "confirmed", "suspected", "scheduled"];
 export const FILTER_LABELS: Record<Filter, string> = {
-  open: "Open", suspected: "Suspected", confirmed: "Confirmed", scheduled: "Scheduled", all: "All",
+  suspected: "Suspected", confirmed: "Confirmed", scheduled: "Scheduled", all: "All",
 };
 export const STATUS_LABEL: Record<PotholeStatus, string> = {
   suspected: "Suspected", confirmed: "Confirmed", scheduled: "Scheduled", repaired: "Repaired", false_positive: "Dismissed",
@@ -39,7 +39,6 @@ export function evidenceLine(p: Pothole): string {
 
 export function matchesFilter(p: Pothole, f: Filter): boolean {
   if (f === "all") return p.status !== "false_positive";
-  if (f === "open") return p.status === "suspected" || p.status === "confirmed";
   return p.status === f;
 }
 

@@ -215,9 +215,8 @@ button { font: inherit; color: inherit; }
 /* -- Map surfaces -----------------------------------------------------------
    The basemap is desaturated at the tile level so the data always outranks
    the map. These rules only tidy up what the vendor injects. */
-.maplibregl-ctrl-attrib, .gm-style-cc { font-size: 10px !important; }
+.maplibregl-ctrl-attrib { font-size: 10px !important; }
 .maplibregl-ctrl-bottom-right { margin-bottom: 2px; }
-.gm-style .gm-style-iw-c { padding: 0 !important; border-radius: var(--r-lg) !important; }
 
 /* MapLibre controls restyled to the tokens (from console-map). */
 .maplibregl-ctrl-scale {

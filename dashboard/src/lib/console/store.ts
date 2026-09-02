@@ -2,9 +2,8 @@ import { create } from "zustand";
 import type {
   ConsoleDataSource, Crew, Detection, PlanRouteRequest, PlanRouteResponse, Pothole, Vehicle,
 } from "@/lib/data/types";
-import { FILTER_CYCLE, isSelectable, type ChipFilter, type Filter } from "./derive";
+import { FILTER_CYCLE, isSelectable, type Filter } from "./derive";
 
-export type LinkSource = "row" | "map" | "keys";
 export type Mode = "manual" | "count" | "time";
 export const DISMISS_UNDO_MS = 10_000;
 const TRAIL_LEN = 5;
@@ -29,11 +28,9 @@ export interface ConsoleState {
   loadError?: string;
 
   linkedId: string | null;
-  linkSource: LinkSource | null;
   pinnedId: string | null;
   selected: string[];
   filter: Filter;
-  density: "comfortable" | "compact";
   /** The dispatch sheet, the one thing on this screen that interrupts. */
   sheetOpen: boolean;
   /**
@@ -43,7 +40,6 @@ export interface ConsoleState {
   drawing: boolean;
 
   planner: PlannerConfig;
-  plannerOpen: boolean;
   planState: "idle" | "planning" | "planned" | "error";
   plan: PlanRouteResponse | null;
   /**
@@ -73,7 +69,7 @@ export interface ConsoleActions {
   setKmToday(km: number): void;
   loadDetections(id: string): Promise<void>;
 
-  link(id: string, source: LinkSource): void;
+  link(id: string): void;
   unlink(): void;
   pin(id: string): void;
   unpin(): void;
@@ -81,12 +77,10 @@ export interface ConsoleActions {
   clearSelection(): void;
   setFilter(f: Filter): void;
   cycleFilter(): void;
-  setDensity(d: ConsoleState["density"]): void;
   setSheetOpen(open: boolean): void;
   setDrawing(drawing: boolean): void;
 
   setPlanner(patch: Partial<PlannerConfig>): void;
-  setPlannerOpen(open: boolean): void;
   setArea(area: GeoJSON.Polygon | null): void;
   planRoute(): Promise<void>;
   resetPlan(): void;
@@ -105,6 +99,13 @@ function tomorrowISO(): string {
 }
 
 export const PLAN_ERROR = "Route service unavailable. The queue is unaffected; try again.";
+/**
+ * A plan that came back with no stops. Said as a failure rather than shown as an
+ * empty route, because a zero-stop plan on screen beside pins the operator has
+ * already committed is the one disagreement this store exists to prevent.
+ */
+export const EMPTY_PLAN_ERROR =
+  "No route could be planned for those stops. The queue is unaffected; adjust the selection and try again.";
 export const DISPATCH_ERROR = "Email service unavailable. The plan is saved; try again.";
 
 export function createConsoleStore() {
@@ -127,10 +128,9 @@ export function createConsoleStore() {
     return {
       potholes: {}, vehicles: {}, crews: [], kmToday: 0, detections: {},
       loadState: "loading",
-      linkedId: null, linkSource: null, pinnedId: null, selected: [], filter: "all", density: "comfortable",
+      linkedId: null, pinnedId: null, selected: [], filter: "all",
       sheetOpen: false, drawing: false,
       planner: { crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20, area: null, planDate: tomorrowISO() },
-      plannerOpen: false,
       planState: "idle", plan: null, planCrewId: null, dispatchState: "idle", dispatchedTo: 0,
       pendingDismiss: null,
 
@@ -191,10 +191,10 @@ export function createConsoleStore() {
         }
       },
 
-      link(id, source) { set({ linkedId: id, linkSource: source }); },
-      unlink() { if (!get().pinnedId) set({ linkedId: null, linkSource: null }); },
+      link(id) { set({ linkedId: id }); },
+      unlink() { if (!get().pinnedId) set({ linkedId: null }); },
       pin(id) {
-        set({ pinnedId: id, linkedId: id, linkSource: get().linkSource ?? "row" });
+        set({ pinnedId: id, linkedId: id });
         void get().loadDetections(id);
       },
       unpin() { set({ pinnedId: null }); },
@@ -206,15 +206,13 @@ export function createConsoleStore() {
       clearSelection() { set({ selected: [] }); },
       setFilter(filter) { set({ filter }); },
       cycleFilter() {
-        const i = FILTER_CYCLE.indexOf(get().filter as ChipFilter);
+        const i = FILTER_CYCLE.indexOf(get().filter);
         set({ filter: FILTER_CYCLE[(i + 1) % FILTER_CYCLE.length] });
       },
-      setDensity(density) { set({ density }); },
       setSheetOpen(sheetOpen) { set({ sheetOpen }); },
       setDrawing(drawing) { set({ drawing }); },
 
       setPlanner(patch) { set((s) => ({ planner: { ...s.planner, ...patch } })); },
-      setPlannerOpen(plannerOpen) { set({ plannerOpen }); },
       setArea(area) { set((s) => ({ planner: { ...s.planner, area } })); },
       async planRoute() {
         const { planner, selected } = get();
@@ -232,8 +230,14 @@ export function createConsoleStore() {
         set({ planState: "planning", planError: undefined });
         try {
           const plan = await ds.planRoute(req);
+          // An empty plan is a failure, not a route. The selection is left alone
+          // so the operator can adjust it rather than rebuild it.
+          if (plan.stops.length === 0) {
+            set({ planState: "error", planError: EMPTY_PLAN_ERROR });
+            return;
+          }
           set({
-            planState: "planned", plan, planCrewId: req.crew_id, plannerOpen: false, selected: [],
+            planState: "planned", plan, planCrewId: req.crew_id, selected: [],
             dispatchState: "idle", dispatchedTo: 0,
           });
         } catch {

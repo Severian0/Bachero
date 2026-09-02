@@ -35,9 +35,9 @@ export function PotholePin({ p }: { p: Pothole }) {
       <button
         type="button"
         aria-label={`${displayName(p)}, ${p.ref}. ${v.label}, severity ${grade} of 4. Open record.`}
-        onMouseEnter={() => link(p.id, "map")}
+        onMouseEnter={() => link(p.id)}
         onMouseLeave={() => unlink()}
-        onFocus={() => link(p.id, "map")}
+        onFocus={() => link(p.id)}
         onBlur={() => unlink()}
         onClick={(e) => { e.stopPropagation(); pin(p.id); }}
         style={{

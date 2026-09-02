@@ -1,7 +1,7 @@
 "use client";
 
 import DetectionFrame from "./DetectionFrame";
-import { displayName, priority, severityGrade } from "@/lib/console/derive";
+import { displayName, isSelectable, priority, severityGrade } from "@/lib/console/derive";
 import { coord, hhmm, todayISO } from "@/lib/console/format";
 import { SEVERITY_WORD, severityFill, STATUS_VISUAL, whenOf } from "@/lib/console/visual";
 import type { Detection, Pothole } from "@/lib/data/types";
@@ -37,7 +37,10 @@ export default function RecordPanel({
 }) {
   const v = STATUS_VISUAL[pothole.status];
   const grade = severityGrade(pothole.severity);
-  const canRoute = pothole.status === "confirmed" || pothole.status === "suspected";
+  // Adding is for work nobody has committed yet; removing has to stay available
+  // once a pothole is scheduled, or a stop dropped from a plan is unreachable
+  // for the rest of the session.
+  const canRoute = isSelectable(pothole) && (onRoute || pothole.status !== "scheduled");
   const today = todayISO();
   const shown = detections?.slice(0, MAX_DETECTION_ROWS) ?? [];
   const more = (detections?.length ?? 0) - shown.length;

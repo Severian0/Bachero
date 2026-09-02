@@ -424,11 +424,12 @@ drag).
 
 ### Shift-drag: the plan area
 
-Shift and drag on the map draws a rectangle. On release it becomes the planner's area, opens
-the planner, and switches the planning mode from *Pick these* to *Best N* — an area is a
-statement about where, so the console stops asking the operator to also say which. Escape
-during the drag cancels it. The area is shown in the sheet as "Area drawn · N in area" with a
-Clear beside it.
+Shift and drag on the map draws a rectangle. On release it becomes the planner's area and
+switches the planning mode from *Pick these* to *Best N* — an area is a statement about where,
+so the console stops asking the operator to also say which. Nothing opens on release: the
+column's bottom bar reports the switch as "Area drawn · N in area · Best N" with a Clear
+beside it, and the sheet states the same area when it is next opened. Escape during the drag
+cancels it.
 
 ### The record panel
 
@@ -436,8 +437,9 @@ Replaces the queue in the same 396px column: back to the queue, the street name 
 `--t-title`, the status tag and reference, the detection frame, the severity grade, the
 evidence fact list, one sentence of stated uncertainty, and the detections table (time,
 vehicle, severity, speed; capped at 8 rows with "and N more"). The footer holds **Add to
-route** / **Remove from route** — offered only for `suspected` and `confirmed` — and **Dismiss
-as false positive**, which is one click and undoable for 10 s.
+route** — offered for `suspected` and `confirmed` — and **Remove from route**, which stays
+available for a `scheduled` record still on the current route so a stop dropped from a plan can
+be reached again. Below it, **Dismiss as false positive**, one click and undoable for 10 s.
 
 ### The dispatch sheet
 
@@ -452,7 +454,11 @@ The flow is one direction and states what is committed at each step:
    *Best N* / *Time budget* — and the numbers for that mode (stops, minutes, minutes per
    stop). Defaults come from the crew's own `repairs_per_shift` and `shift_minutes`. An area,
    if one was drawn, narrows the candidates.
-2. **Plan route.** `.btn-primary`, disabled with no crew or no candidates.
+2. **Plan route.** `.btn-primary`, disabled with no crew or no candidates. Once a route has
+   been planned the column's button reads **Open route** and stays live, so closing the sheet
+   never strands the plan behind it. A plan that comes back with no stops is a failure, not an
+   empty route: *"No route could be planned for those stops. The queue is unaffected; adjust
+   the selection and try again."*
 3. **Read the answer.** Total distance at `--t-metric`, the duration beside it, how much
    shorter it is than visiting by priority, and the stops in the order a crew would drive
    them, each numbered on an `--action` badge with its reference, grade, status and ETA. Any
@@ -474,6 +480,11 @@ The flow is one direction and states what is committed at each step:
   cursor.
 - A failure names what failed and what it does not affect. The queue is usable when the map is
   not, and the sheet keeps the plan when the email fails.
+- The queue distinguishes three states. While the source is loading it shows three 58px
+  `--rule-soft` hairline rows and no words, because "nothing here" is not yet known to be
+  true. When the load has failed it says *"Could not load the queue. {reason}"* with a
+  `.btn-secondary` **Retry** that runs the load again. Only once the load is ready does an
+  empty list say *"Nothing matches this filter. Choose All to see the whole queue."*
 
 ---
 

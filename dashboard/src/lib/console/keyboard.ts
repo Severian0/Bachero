@@ -14,7 +14,7 @@ export function handleKey(
     e.preventDefault();
     const i = rows.findIndex((p) => p.id === s.linkedId);
     const n = e.key === "ArrowDown" ? Math.min(rows.length - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
-    s.link(rows[n].id, "keys");
+    s.link(rows[n].id);
     return true;
   }
   if (e.key === "Enter") {

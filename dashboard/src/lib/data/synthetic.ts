@@ -81,6 +81,12 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
   const handlers = new Set<SubscribeHandlers>();
   let kmToday = 148.6;
   let planCounter = 0;
+  /**
+   * What each pothole was before this source scheduled it. A re-plan that drops
+   * a stop puts the pothole back to that status, so the queue and the map never
+   * keep a stop order for a route that no longer contains it.
+   */
+  const scheduledFrom = new Map<string, Pothole["status"]>();
 
   SPOTS.forEach((spot) => {
     const id = uuidFrom(rng);
@@ -149,8 +155,15 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
       if (p) potholes.set(id, { ...p, status: "false_positive" });
     },
     async planRoute(req: PlanRouteRequest): Promise<PlanRouteResponse> {
-      const open = [...potholes.values()].filter((p) => p.status === "suspected" || p.status === "confirmed");
-      let cands = req.mode === "manual" ? open.filter((p) => req.pothole_ids?.includes(p.id)) : open;
+      // Picking stops by hand takes the named potholes whatever their status,
+      // because re-planning a route without one of its stops names potholes
+      // this source has already marked scheduled. Best N and a time budget work
+      // from the open queue, which is what "unassigned" means there.
+      const named = new Set(req.pothole_ids ?? []);
+      const all = [...potholes.values()].filter((p) => p.status !== "repaired" && p.status !== "false_positive");
+      let cands = req.mode === "manual"
+        ? all.filter((p) => named.has(p.id))
+        : all.filter((p) => p.status === "suspected" || p.status === "confirmed");
       if (req.mode !== "manual" && req.area) cands = cands.filter((p) => pointInPolygon([p.lng, p.lat], req.area!));
       const serviceMin = req.service_min_per_stop ?? 20;
       const m = buildMatrix([DEPOT, ...cands.map((p): LngLat => [p.lng, p.lat])], 25);
@@ -166,11 +179,27 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
         prev = ci + 1;
         const eta = new Date(start.getTime() + elapsed * 60_000).toISOString();
         elapsed += serviceMin;
+        // A pothole the seed already had on someone's route reverts to confirmed
+        // rather than to a scheduled state with no stop order behind it.
+        if (!scheduledFrom.has(p.id)) scheduledFrom.set(p.id, p.status === "scheduled" ? "confirmed" : p.status);
         const updated: Pothole = { ...p, status: "scheduled", stop_order: k + 1, updated_at: new Date().toISOString() };
         potholes.set(p.id, updated);
         emit(updated);
         return { work_order_id: `${routeId}-wo-${k + 1}`, pothole_id: p.id, stop_order: k + 1, eta, lng: p.lng, lat: p.lat, severity: p.severity, photo_url: p.photo_url };
       });
+      // Anything this source had scheduled that the new plan leaves out goes back
+      // to the status it held before it was scheduled, with no stop order.
+      const kept = new Set(stops.map((s) => s.pothole_id));
+      for (const [id, before] of [...scheduledFrom]) {
+        if (kept.has(id)) continue;
+        scheduledFrom.delete(id);
+        const p = potholes.get(id);
+        if (!p || p.status !== "scheduled") continue;
+        const restored: Pothole = { ...p, status: before, stop_order: null, updated_at: new Date().toISOString() };
+        potholes.set(id, restored);
+        emit(restored);
+      }
+
       const coords: [number, number][] = [DEPOT, ...stops.map((s): [number, number] => [s.lng, s.lat]), DEPOT];
       return {
         route_plan_id: routeId, stops,

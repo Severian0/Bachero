@@ -108,7 +108,7 @@ function FeedState({ live, loading }: { live: boolean; loading: boolean }) {
           animation: live ? "bch-pulse 2.4s ease-in-out infinite" : undefined,
         }}
       />
-      {loading ? null : live ? "Detector feed live" : "Fixture data, feed not connected"}
+      {loading ? null : live ? "Detector feed live" : "Synthetic fleet, backend not connected"}
     </p>
   );
 }
