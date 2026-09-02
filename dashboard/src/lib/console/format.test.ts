@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { km, minutes, hhmm, coord, plural, pct, monthsSince, todayISO } from "./format";
+import { km, minutes, hhmm, coord, plural, pct, monthsSince, todayISO, parseAddresses } from "./format";
 import { potholeRef, toPothole } from "@/lib/data/types";
 import type { PotholeMapRow } from "@/lib/types";
 
@@ -52,5 +52,22 @@ describe("toPothole", () => {
   });
   it("potholeRef is stable", () => {
     expect(potholeRef("abcd1234-x")).toBe("BCH-ABCD");
+  });
+});
+
+describe("parseAddresses", () => {
+  it("splits on commas and trims each address", () => {
+    expect(parseAddresses("crew@council.gov.uk, second@council.gov.uk"))
+      .toEqual(["crew@council.gov.uk", "second@council.gov.uk"]);
+    expect(parseAddresses("  crew@council.gov.uk  ")).toEqual(["crew@council.gov.uk"]);
+  });
+  it("drops empties, so a trailing comma or a stray separator sends nothing extra", () => {
+    expect(parseAddresses("crew@council.gov.uk,")).toEqual(["crew@council.gov.uk"]);
+    expect(parseAddresses("a@b.gov.uk, , ,c@d.gov.uk")).toEqual(["a@b.gov.uk", "c@d.gov.uk"]);
+  });
+  it("is empty for an empty or whitespace-only field, which is what disables the send", () => {
+    expect(parseAddresses("")).toEqual([]);
+    expect(parseAddresses("   ")).toEqual([]);
+    expect(parseAddresses(" , , ")).toEqual([]);
   });
 });

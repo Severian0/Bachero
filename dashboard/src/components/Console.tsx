@@ -69,10 +69,6 @@ export default function Console() {
   }, [all]);
 
   const routeIds = useMemo(() => new Set(selected), [selected]);
-  const stops = useMemo(
-    () => selected.map((id) => potholes[id]).filter((p) => p != null),
-    [selected, potholes],
-  );
 
   const opened = useMemo(() => {
     const p = pinnedId ? potholes[pinnedId] : undefined;
@@ -100,13 +96,6 @@ export default function Console() {
     clearSelection();
     if (planState === "planned") resetPlan();
   }, [clearSelection, planState, resetPlan]);
-
-  // Dispatch is not yet wired to the work-order service, so sending closes the
-  // sheet and drops the proposed plan. The store's own dispatch replaces this.
-  const onDispatched = useCallback(() => {
-    setSheetOpen(false);
-    resetPlan();
-  }, [setSheetOpen, resetPlan]);
 
   // Keyboard is first class. The linked row and the linked pin are the same
   // idea as focus, so the arrow keys move both at once. The sheet is modal and
@@ -190,15 +179,7 @@ export default function Console() {
         </aside>
       </main>
 
-      {sheetOpen && (
-        <DispatchSheet
-          stops={stops}
-          crews={crews}
-          onRemove={toggleSelected}
-          onClose={() => setSheetOpen(false)}
-          onSent={onDispatched}
-        />
-      )}
+      {sheetOpen && <DispatchSheet />}
 
       {pendingDismiss && (
         <div

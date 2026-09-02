@@ -1,6 +1,5 @@
 import type { Pothole } from "@/lib/data/types";
 import type { PotholeStatus } from "@/lib/types";
-import { haversineKm } from "@/lib/solver/haversine";
 import { countInArea } from "./area";
 import { coord, hhmm, monthsSince, plural } from "./format";
 
@@ -103,18 +102,4 @@ export function planCandidates(
   if (mode === "manual") return selectedCount;
   if (area) return countInArea(potholes, area);
   return potholes.filter((p) => p.status === "suspected" || p.status === "confirmed").length;
-}
-
-/**
- * Straight-line distance along a list of stops, in the order they are listed,
- * which is the order a crew would drive them. Deliberately not a road
- * distance: it is the honest back-of-envelope figure the console quotes while
- * the operator is still choosing, and the sheet says so in as many words.
- */
-export function straightLineKm(stops: Pick<Pothole, "lng" | "lat">[]): number {
-  let total = 0;
-  for (let i = 1; i < stops.length; i += 1) {
-    total += haversineKm([stops[i - 1].lng, stops[i - 1].lat], [stops[i].lng, stops[i].lat]);
-  }
-  return total;
 }

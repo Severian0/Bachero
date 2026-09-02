@@ -1,57 +1,69 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { OPERATOR } from "@/lib/console/branding";
-import { displayName, severityGrade, straightLineKm } from "@/lib/console/derive";
+import { countInArea } from "@/lib/console/area";
+import { displayName, planCandidates, severityGrade } from "@/lib/console/derive";
+import { hhmm, km, minutes, parseAddresses, pct, plural } from "@/lib/console/format";
+import { useConsole, type Mode } from "@/lib/console/store";
 import { SEVERITY_WORD, STATUS_VISUAL } from "@/lib/console/visual";
-import type { Crew, Pothole } from "@/lib/data/types";
+import type { Pothole } from "@/lib/data/types";
 
-/**
- * Crew assumptions. These are printed in the sheet rather than buried here,
- * because the officer who quotes the resulting figure at committee has to be
- * able to defend where it came from.
- */
-const CREW_KM_PER_HOUR = 21;
-const MINUTES_ON_SITE = 22;
+const MODES: { key: Mode; label: string }[] = [
+  { key: "manual", label: "Pick these" },
+  { key: "count", label: "Best N" },
+  { key: "time", label: "Time budget" },
+];
+
+/** Empty or invalid input commits the fallback instead of coercing to 0. */
+const num = (v: string, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
 
 /**
  * Committing a crew's day is the accountable act in this product, so it is
- * the one place that interrupts. The sheet states the order, the cost, the
- * assumptions behind the cost, and anything on the route that the console
- * itself has called unconfirmed, before it will send.
+ * the one place that interrupts. The sheet states who is going, how the route
+ * was chosen, what it costs, and anything on it that the console itself has
+ * called unconfirmed, before it will send.
+ *
+ * It holds no facts of its own: the planner settings, the plan and the
+ * dispatch all live in the console store, so what the sheet shows and what the
+ * map draws can never disagree. Its only local state is the email field.
  */
-export default function DispatchSheet({
-  stops,
-  crews,
-  onRemove,
-  onClose,
-  onSent,
-}: {
-  stops: Pothole[];
-  crews: Crew[];
-  onRemove: (id: string) => void;
-  onClose: () => void;
-  onSent: (crew: Crew, reference: string) => void;
-}) {
-  const [picked, setPicked] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState<{ crew: Crew; reference: string; at: string } | null>(null);
+export default function DispatchSheet() {
+  const potholes = useConsole((s) => s.potholes);
+  const crews = useConsole((s) => s.crews);
+  const selected = useConsole((s) => s.selected);
+  const planner = useConsole((s) => s.planner);
+  const planState = useConsole((s) => s.planState);
+  const plan = useConsole((s) => s.plan);
+  const planError = useConsole((s) => s.planError);
+  const dispatchState = useConsole((s) => s.dispatchState);
+  const dispatchError = useConsole((s) => s.dispatchError);
+  const dispatchedTo = useConsole((s) => s.dispatchedTo);
+
+  const setPlanner = useConsole((s) => s.setPlanner);
+  const setArea = useConsole((s) => s.setArea);
+  const setSheetOpen = useConsole((s) => s.setSheetOpen);
+  const toggleSelected = useConsole((s) => s.toggleSelected);
+  const clearSelection = useConsole((s) => s.clearSelection);
+  const planRoute = useConsole((s) => s.planRoute);
+  const resetPlan = useConsole((s) => s.resetPlan);
+  const dispatch = useConsole((s) => s.dispatch);
+
+  const [to, setTo] = useState(process.env.NEXT_PUBLIC_DEMO_CREW_EMAIL ?? "");
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // The crews arrive with the data load, so the pick falls back to the first
-  // crew on the list until the operator has chosen one.
-  const crewId = picked !== null && crews.some((c) => c.id === picked) ? picked : crews[0]?.id ?? "";
-  const unconfirmed = stops.filter((s) => s.status === "suspected");
-  const km = straightLineKm(stops);
-  const minutes = Math.round((km / CREW_KM_PER_HOUR) * 60 + stops.length * MINUTES_ON_SITE);
+  const close = () => setSheetOpen(false);
 
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        setSheetOpen(false);
         return;
       }
       if (e.key !== "Tab" || !panelRef.current) return;
@@ -71,30 +83,56 @@ export default function DispatchSheet({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  }, [setSheetOpen]);
 
-  function send() {
-    const crew = crews.find((c) => c.id === crewId);
-    if (!crew) return;
-    setSending(true);
-    window.setTimeout(() => {
-      const d = new Date();
-      const reference = `DR-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}-${stops.length}`;
-      setSending(false);
-      setSent({
-        crew,
-        reference,
-        at: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
-      });
-      onSent(crew, reference);
-    }, 700);
+  const all = Object.values(potholes);
+  const crew = crews.find((c) => c.id === planner.crewId);
+  const inArea = countInArea(all, planner.area);
+  const candidates = planCandidates(all, {
+    mode: planner.mode, area: planner.area, selectedCount: selected.length,
+  });
+
+  const planned = planState === "planned" && plan ? plan : null;
+  const sent = dispatchState === "sent" && planned;
+
+  // Before a route comes back the sheet lists what the operator picked, and
+  // only in the mode where those picks are the input; after it, the order the
+  // solver actually chose. Everything below reads one list.
+  const rows: { key: string; pothole: Pothole | undefined; order: number; eta?: string }[] = planned
+    ? planned.stops.map((s) => ({
+        key: s.work_order_id, pothole: potholes[s.pothole_id], order: s.stop_order, eta: s.eta,
+      }))
+    : planner.mode === "manual"
+      ? selected.map((id, i) => ({ key: id, pothole: potholes[id], order: i + 1 }))
+      : [];
+  const unconfirmed = rows
+    .map((r) => r.pothole)
+    .filter((p): p is Pothole => p != null && p.status === "suspected");
+
+  /**
+   * Taking a stop off a planned route means planning again without it: the
+   * plan is the solver's answer, not a list to edit. Only offered in manual
+   * mode, where the operator's own picks are the input. `planRoute` clears the
+   * selection when it succeeds, so the remaining stops are re-selected first.
+   */
+  function removeStop(id: string) {
+    if (!planned) {
+      toggleSelected(id);
+      return;
+    }
+    clearSelection();
+    for (const s of planned.stops) if (s.pothole_id !== id) toggleSelected(s.pothole_id);
+    void planRoute();
   }
+
+  const addresses = parseAddresses(to);
+  const saved = planned && planned.baseline_km > 0 ? 1 - planned.total_km / planned.baseline_km : 0;
 
   return (
     <div
       role="presentation"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) close();
       }}
       style={{
         position: "fixed",
@@ -131,10 +169,12 @@ export default function DispatchSheet({
             <p className="secondary" style={{ margin: "2px 0 0", fontSize: "var(--t-small)" }}>
               {sent
                 ? `Sent by ${OPERATOR.name}, ${OPERATOR.role}`
-                : `${stops.length} ${stops.length === 1 ? "stop" : "stops"} in the order a crew would drive them`}
+                : planned
+                  ? `${planned.stops.length} ${planned.stops.length === 1 ? "stop" : "stops"} in the order a crew would drive them`
+                  : `Plan for ${planner.planDate}`}
             </p>
           </div>
-          <button ref={closeRef} type="button" className="btn btn-quiet btn-sm" onClick={onClose} aria-label="Close">
+          <button ref={closeRef} type="button" className="btn btn-quiet btn-sm" onClick={close} aria-label="Close">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
               <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" />
             </svg>
@@ -145,56 +185,24 @@ export default function DispatchSheet({
           {sent ? (
             <>
               <dl style={{ margin: 0, display: "grid", gap: "var(--s2)" }}>
-                <Line label="Work order" value={sent.reference} />
-                <Line label="Crew" value={sent.crew.name} />
-                <Line label="Dispatched" value={`${sent.at} today`} />
-                <Line label="Stops" value={`${stops.length}, ${km.toFixed(1)} km, about ${minutes} min`} />
+                <Line label="Work order" value={planned.route_plan_id} />
+                <Line label="Crew" value={crew?.name ?? "—"} />
+                <Line label="Stops" value={`${planned.stops.length}, ${km(planned.total_km)}, ${minutes(planned.total_minutes)}`} />
+                <Line label="Sent to" value={plural(dispatchedTo, "address", "addresses")} />
               </dl>
               <p style={{ margin: 0, fontSize: "var(--t-small)", lineHeight: 1.5, padding: "var(--s3)", background: "var(--committed-soft)", borderRadius: "var(--r-md)", border: "1px solid var(--committed-edge)" }}>
-                A work order with the route, the coordinates and the detector frames has been emailed to {sent.crew.name}.
+                A work order with the route, the coordinates and the detector frames has been emailed to {crew?.name ?? "the crew"}.
                 The stops now show as scheduled on the map.
+              </p>
+              <p style={{ margin: 0, fontSize: "var(--t-small)" }}>
+                Crew page:{" "}
+                <a className="data" href={`/route/${planned.route_plan_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--action)" }}>
+                  /route/{planned.route_plan_id.slice(0, 8)}…
+                </a>
               </p>
             </>
           ) : (
             <>
-              <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", border: "1px solid var(--rule-soft)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
-                {stops.map((s, i) => (
-                  <li
-                    key={s.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--s3)",
-                      padding: "var(--s2) var(--s3)",
-                      borderBottom: i === stops.length - 1 ? "none" : "1px solid var(--rule-soft)",
-                    }}
-                  >
-                    <span className="data" style={{ width: 22, height: 22, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: "var(--r-sm)", background: "var(--committed)", color: "#fff", fontSize: 11, fontWeight: 700 }}>
-                      {i + 1}
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: "var(--t-small)", fontWeight: 600 }}>{displayName(s)}</span>
-                      <span className="secondary" style={{ display: "block", fontSize: 11 }}>
-                        <span className="data">{s.ref}</span>, {SEVERITY_WORD[severityGrade(s.severity)].toLowerCase()}, {STATUS_VISUAL[s.status].label.toLowerCase()}
-                      </span>
-                    </span>
-                    <button type="button" className="btn btn-quiet btn-sm" onClick={() => onRemove(s.id)}>
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ol>
-
-              {unconfirmed.length > 0 && (
-                <p style={{ margin: 0, fontSize: "var(--t-small)", lineHeight: 1.5, padding: "var(--s3)", background: "#fdf6e3", border: "1px solid #d4b95e", borderRadius: "var(--r-md)" }}>
-                  <strong style={{ fontWeight: 600 }}>
-                    {unconfirmed.length} {unconfirmed.length === 1 ? "stop is" : "stops are"} suspected only.
-                  </strong>{" "}
-                  {unconfirmed.map(displayName).join(", ")} {unconfirmed.length === 1 ? "has" : "have"} been seen by
-                  one vehicle and not corroborated. Sending a crew to an unconfirmed defect is your decision to record.
-                </p>
-              )}
-
               <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
                 <legend className="micro secondary" style={{ marginBottom: "var(--s2)" }}>
                   Send to
@@ -208,8 +216,8 @@ export default function DispatchSheet({
                         alignItems: "center",
                         gap: "var(--s3)",
                         padding: "var(--s2) var(--s3)",
-                        border: `1px solid ${crewId === c.id ? "var(--action)" : "var(--rule)"}`,
-                        background: crewId === c.id ? "var(--action-soft)" : "var(--surface)",
+                        border: `1px solid ${planner.crewId === c.id ? "var(--action)" : "var(--rule)"}`,
+                        background: planner.crewId === c.id ? "var(--action-soft)" : "var(--surface)",
                         borderRadius: "var(--r-md)",
                         cursor: "pointer",
                       }}
@@ -218,8 +226,12 @@ export default function DispatchSheet({
                         type="radio"
                         name="crew"
                         value={c.id}
-                        checked={crewId === c.id}
-                        onChange={() => setPicked(c.id)}
+                        checked={planner.crewId === c.id}
+                        onChange={() => setPlanner({
+                          crewId: c.id,
+                          maxStops: c.repairs_per_shift ?? planner.maxStops,
+                          timeBudgetMin: c.shift_minutes ?? planner.timeBudgetMin,
+                        })}
                         style={{ accentColor: "var(--action)", width: 16, height: 16 }}
                       />
                       <span style={{ flex: 1, fontSize: "var(--t-small)", fontWeight: 600 }}>{c.name}</span>
@@ -228,35 +240,227 @@ export default function DispatchSheet({
                 </div>
               </fieldset>
 
-              <div>
-                <h3 className="micro secondary" style={{ marginBottom: "var(--s2)" }}>
-                  Estimate
-                </h3>
-                <p style={{ margin: 0, fontSize: "var(--t-small)", lineHeight: 1.5 }}>
-                  <span className="data" style={{ fontWeight: 600 }}>{km.toFixed(1)} km</span> driving and{" "}
-                  <span className="data" style={{ fontWeight: 600 }}>{minutes} min</span> in total.
+              {!planned && (
+                <div style={{ display: "grid", gap: "var(--s3)" }}>
+                  <div role="group" aria-label="Planning mode" style={{ display: "flex", gap: 6 }}>
+                    {MODES.map((m) => {
+                      const on = planner.mode === m.key;
+                      return (
+                        <button
+                          key={m.key}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => setPlanner({ mode: m.key })}
+                          style={{
+                            flex: 1,
+                            height: 30,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "var(--t-small)",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            borderRadius: "var(--r-md)",
+                            border: `1px solid ${on ? "var(--action)" : "var(--rule)"}`,
+                            background: on ? "var(--action)" : "var(--surface)",
+                            color: on ? "var(--action-ink)" : "var(--ink)",
+                            transition: "background 120ms linear, border-color 120ms linear",
+                          }}
+                        >
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: "var(--s3)" }}>
+                    {planner.mode === "count" && (
+                      <Field label="Stops">
+                        <input
+                          key={`stops-${planner.crewId ?? "none"}`}
+                          className="data"
+                          style={INPUT}
+                          type="number"
+                          min={1}
+                          max={50}
+                          defaultValue={planner.maxStops}
+                          onBlur={(e) => setPlanner({ maxStops: num(e.target.value, planner.maxStops) })}
+                        />
+                      </Field>
+                    )}
+                    {planner.mode === "time" && (
+                      <Field label="Minutes">
+                        <input
+                          key={`minutes-${planner.crewId ?? "none"}`}
+                          className="data"
+                          style={INPUT}
+                          type="number"
+                          min={30}
+                          step={30}
+                          defaultValue={planner.timeBudgetMin}
+                          onBlur={(e) => setPlanner({ timeBudgetMin: num(e.target.value, planner.timeBudgetMin) })}
+                        />
+                      </Field>
+                    )}
+                    <Field label="Minutes per stop">
+                      <input
+                        key={`service-${planner.crewId ?? "none"}`}
+                        className="data"
+                        style={INPUT}
+                        type="number"
+                        min={5}
+                        step={5}
+                        defaultValue={planner.serviceMinPerStop}
+                        onBlur={(e) => setPlanner({ serviceMinPerStop: num(e.target.value, planner.serviceMinPerStop) })}
+                      />
+                    </Field>
+                  </div>
+
+                  {planner.mode !== "manual" && (
+                    <div className="secondary" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--s3)", fontSize: "var(--t-small)" }}>
+                      <span>{planner.area ? `Area drawn · ${inArea} in area` : "No area · Shift-drag on the map to draw one"}</span>
+                      {planner.area && (
+                        <button type="button" className="btn btn-quiet btn-sm" onClick={() => setArea(null)}>
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {planned && (
+                <div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "var(--s3)" }}>
+                    <span className="data" style={{ fontSize: "var(--t-metric)", fontWeight: 600, lineHeight: 1 }}>
+                      {km(planned.total_km)}
+                    </span>
+                    <span className="data secondary" style={{ fontSize: "var(--t-small)" }}>
+                      {minutes(planned.total_minutes)}
+                    </span>
+                  </div>
+                  <p className="secondary" style={{ margin: "var(--s1) 0 0", fontSize: "var(--t-small)" }}>
+                    <span className="data">{pct(Math.max(0, saved))}</span> shorter than visiting by priority (
+                    <span className="data">{km(planned.baseline_km)}</span>)
+                  </p>
+                </div>
+              )}
+
+              {rows.length > 0 && (
+                <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", border: "1px solid var(--rule-soft)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
+                  {rows.map((r, i) => (
+                    <li
+                      key={r.key}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "var(--s3)",
+                        padding: "var(--s2) var(--s3)",
+                        borderBottom: i === rows.length - 1 ? "none" : "1px solid var(--rule-soft)",
+                      }}
+                    >
+                      <span className="data" style={{ width: 22, height: 22, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: "var(--r-sm)", background: "var(--action)", color: "var(--action-ink)", fontSize: 11, fontWeight: 700 }}>
+                        {r.order}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "block", fontSize: "var(--t-small)", fontWeight: 600 }}>
+                          {r.pothole ? displayName(r.pothole) : "Record not loaded"}
+                        </span>
+                        {r.pothole && (
+                          <span className="secondary" style={{ display: "block", fontSize: 11 }}>
+                            <span className="data">{r.pothole.ref}</span>, {SEVERITY_WORD[severityGrade(r.pothole.severity)].toLowerCase()}, {STATUS_VISUAL[r.pothole.status].label.toLowerCase()}
+                          </span>
+                        )}
+                      </span>
+                      {r.eta && (
+                        <span className="data secondary" style={{ fontSize: 11 }}>
+                          eta {hhmm(r.eta)}
+                        </span>
+                      )}
+                      {(!planned || planner.mode === "manual") && (
+                        <button type="button" className="btn btn-quiet btn-sm" onClick={() => removeStop(r.pothole?.id ?? r.key)}>
+                          Remove
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              {unconfirmed.length > 0 && (
+                <p style={{ margin: 0, fontSize: "var(--t-small)", lineHeight: 1.5, padding: "var(--s3)", background: "var(--action-soft)", border: "1px solid var(--action-edge)", borderRadius: "var(--r-md)" }}>
+                  <strong style={{ fontWeight: 600 }}>
+                    {unconfirmed.length} {unconfirmed.length === 1 ? "stop is" : "stops are"} suspected only.
+                  </strong>{" "}
+                  {unconfirmed.map(displayName).join(", ")} {unconfirmed.length === 1 ? "has" : "have"} been seen by
+                  one vehicle and not corroborated. Sending a crew to an unconfirmed defect is your decision to record.
                 </p>
-                <p className="secondary" style={{ margin: "2px 0 0", fontSize: "var(--t-small)", lineHeight: 1.5 }}>
-                  Assumes {CREW_KM_PER_HOUR} km/h average across the network and {MINUTES_ON_SITE} minutes per repair.
-                  Straight-line distance between stops, so the real drive will be longer.
+              )}
+
+              {planned && (
+                <Field label="Crew email">
+                  <input
+                    style={INPUT}
+                    type="text"
+                    placeholder="crew@council.gov.uk, second@council.gov.uk"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                  />
+                </Field>
+              )}
+
+              {planState === "error" && (
+                <p role="alert" className="secondary" style={{ margin: 0, fontSize: "var(--t-small)" }}>
+                  {planError}
                 </p>
-              </div>
+              )}
+              {dispatchState === "error" && (
+                <p role="alert" className="secondary" style={{ margin: 0, fontSize: "var(--t-small)" }}>
+                  {dispatchError}
+                </p>
+              )}
             </>
           )}
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--s2)", padding: "var(--s3) var(--s5)", borderTop: "1px solid var(--rule-soft)", background: "var(--canvas)" }}>
           {sent ? (
-            <button type="button" className="btn btn-primary" onClick={onClose}>
+            <button type="button" className="btn btn-primary" onClick={close}>
               Back to the queue
             </button>
+          ) : planned ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  resetPlan();
+                  close();
+                }}
+              >
+                Discard plan
+              </button>
+              <button
+                type="button"
+                className="btn btn-commit"
+                disabled={addresses.length === 0 || dispatchState === "sending"}
+                onClick={() => void dispatch(addresses)}
+              >
+                {dispatchState === "sending" ? "Sending…" : "Dispatch to crew"}
+              </button>
+            </>
           ) : (
             <>
-              <button type="button" className="btn btn-secondary" onClick={onClose}>
+              <button type="button" className="btn btn-secondary" onClick={close}>
                 Cancel
               </button>
-              <button type="button" className="btn btn-commit" onClick={send} disabled={sending || stops.length === 0 || !crewId}>
-                {sending ? "Sending" : `Send to ${crews.find((c) => c.id === crewId)?.name ?? "a crew"}`}
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={candidates === 0 || !planner.crewId || planState === "planning"}
+                onClick={() => void planRoute()}
+              >
+                {planState === "planning" ? "Planning…" : "Plan route"}
               </button>
             </>
           )}
@@ -266,13 +470,35 @@ export default function DispatchSheet({
   );
 }
 
+const INPUT: React.CSSProperties = {
+  width: "100%",
+  height: 38,
+  padding: "0 var(--s3)",
+  fontSize: "var(--t-small)",
+  color: "var(--ink)",
+  background: "var(--surface)",
+  border: "1px solid var(--rule)",
+  borderRadius: "var(--r-md)",
+};
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label style={{ display: "block", minWidth: 0 }}>
+      <span className="micro secondary" style={{ display: "block", marginBottom: "var(--s1)" }}>
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 function Line({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--s3)" }}>
       <dt className="secondary" style={{ fontSize: "var(--t-small)" }}>
         {label}
       </dt>
-      <dd className="data" style={{ margin: 0, fontSize: "var(--t-small)", fontWeight: 600 }}>
+      <dd className="data" style={{ margin: 0, fontSize: "var(--t-small)", fontWeight: 600, wordBreak: "break-all", textAlign: "right" }}>
         {value}
       </dd>
     </div>

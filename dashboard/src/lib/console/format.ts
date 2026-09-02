@@ -25,3 +25,13 @@ export function monthsSince(iso: string, now: Date = new Date()): number {
   const days = (now.getTime() - new Date(iso).getTime()) / 86_400_000;
   return Math.round((days / 30) * 10) / 10;
 }
+
+/**
+ * The dispatch field is a plain comma-separated list, because that is how an
+ * operator pastes addresses out of a directory. A trailing comma or a stray
+ * separator must not send an empty recipient, so blanks are dropped rather
+ * than passed through to the mail service.
+ */
+export function parseAddresses(text: string): string[] {
+  return text.split(",").map((s) => s.trim()).filter(Boolean);
+}

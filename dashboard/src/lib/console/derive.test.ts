@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   priority, severitySegments, severityGrade, evidenceLine, inspectorLines,
   matchesFilter, visibleRows, stats, isSelectable, FILTER_CYCLE,
-  estimateMinutes, planCandidates, straightLineKm,
+  estimateMinutes, planCandidates,
 } from "./derive";
 import type { Pothole } from "@/lib/data/types";
 
@@ -121,19 +121,5 @@ describe("planCandidates", () => {
     expect(planCandidates(list, { mode: "count", area: null, selectedCount: 0 })).toBe(3);
     expect(planCandidates(list, { mode: "time", area: null, selectedCount: 9 })).toBe(3);
     expect(planCandidates(list, { mode: "count", area, selectedCount: 0 })).toBe(2);
-  });
-});
-
-describe("straightLineKm", () => {
-  it("sums the legs in the order the stops are listed, and is zero for fewer than two", () => {
-    expect(straightLineKm([])).toBe(0);
-    expect(straightLineKm([p({ lng: -0.1, lat: 51.5 })])).toBe(0);
-    // Three points a degree of latitude apart: two legs of ~111.2 km each.
-    const line = [p({ lat: 51, lng: 0 }), p({ lat: 52, lng: 0 }), p({ lat: 53, lng: 0 })];
-    expect(straightLineKm(line)).toBeCloseTo(222.4, 0);
-  });
-  it("depends on the order given, because that is the order a crew would drive", () => {
-    const a = p({ lat: 51, lng: 0 }), b = p({ lat: 52, lng: 0 }), c = p({ lat: 51.1, lng: 0 });
-    expect(straightLineKm([a, c, b])).toBeLessThan(straightLineKm([a, b, c]));
   });
 });
