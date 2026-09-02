@@ -561,6 +561,55 @@ describe("planRoute", () => {
     expect(result.stops.map((s) => s.pothole_id)).toEqual([POTHOLE_B, POTHOLE_A]);
   });
 
+  it("400s when the tour cannot be driven, before anything is written", async () => {
+    const { db, writes } = makeDb(baseTables());
+    // Every OSRM cell was null, which osrm.table() maps to Infinity.
+    const unreachable: Matrix = {
+      durationMin: [[0, Infinity, Infinity], [Infinity, 0, Infinity], [Infinity, Infinity, 0]],
+      distanceKm: MATRIX.distanceKm,
+    };
+    const osrm = makeOsrm({ table: vi.fn<(points: LngLat[]) => Promise<Matrix>>().mockResolvedValue(unreachable) });
+
+    await expect(planRoute({ db, osrm }, COUNT_REQ)).rejects.toMatchObject({
+      status: 400,
+      message: "Some of those potholes cannot be reached by road.",
+    });
+    expect(writes).toEqual([]);
+  });
+
+  it("leaves a carried-over stop scheduled and resets only the stops the new plan drops", async () => {
+    const tables = baseTables();
+    tables.route_plans = [{ id: "plan-old", crew_id: CREW, plan_date: DATE, status: "draft" }];
+    tables.work_orders = [
+      // A is on the old plan and will be on the new one; p-dropped will not.
+      { id: "wo-1", pothole_id: POTHOLE_A, route_plan_id: "plan-old", stop_order: 1, status: "assigned" },
+      { id: "wo-2", pothole_id: "p-dropped", route_plan_id: "plan-old", stop_order: 2, status: "assigned" },
+    ];
+    tables.potholes = [
+      { id: POTHOLE_A, status: "scheduled" },
+      { id: "p-dropped", status: "scheduled" },
+    ];
+    const { db, writes } = makeDb(tables);
+
+    const result = await planRoute({ db, osrm: makeOsrm() }, COUNT_REQ);
+    expect(result.stops.map((s) => s.pothole_id)).toContain(POTHOLE_A);
+
+    // A is scheduled before and after, so it is never reset: no
+    // scheduled → confirmed → scheduled pair goes out on the wire for it.
+    expect(tables.potholes.find((p) => p.id === POTHOLE_A)?.status).toBe("scheduled");
+    expect(tables.potholes.find((p) => p.id === "p-dropped")?.status).toBe("confirmed");
+    const resets = writes.filter((w) => w.table === "potholes" && w.op === "update");
+    expect(resets).toHaveLength(1);
+    expect(resets[0].filters.find((f) => f.col === "id")?.values).toEqual(["p-dropped"]);
+
+    // Both old work orders are still cancelled and deleted, A's included.
+    const cancel = writes.find((w) => w.table === "work_orders" && w.op === "update");
+    expect(cancel?.payload).toMatchObject({ status: "cancelled" });
+    expect(cancel?.filters.find((f) => f.col === "id")?.values).toEqual(["wo-1", "wo-2"]);
+    expect(tables.work_orders.map((w) => w.id)).not.toContain("wo-1");
+    expect(tables.work_orders.map((w) => w.id)).not.toContain("wo-2");
+  });
+
   it("replaces an existing plan: cancels, un-schedules, then deletes", async () => {
     const tables = baseTables();
     tables.route_plans = [{ id: "plan-old", crew_id: CREW, plan_date: DATE, status: "draft" }];

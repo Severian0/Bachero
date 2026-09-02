@@ -4,7 +4,7 @@ import {
   matchesFilter, visibleRows, stats, isSelectable, FILTER_CYCLE,
   estimateMinutes, planCandidates,
 } from "./derive";
-import type { Pothole } from "@/lib/data/types";
+import type { PlanRouteResponse, Pothole } from "@/lib/data/types";
 
 const now = new Date("2026-09-02T12:00:00Z");
 const base: Pothole = {
@@ -82,6 +82,15 @@ describe("estimateMinutes", () => {
 });
 
 describe("planCandidates", () => {
+  const planOf = (ids: string[]): PlanRouteResponse => ({
+    route_plan_id: "r1",
+    stops: ids.map((id, i) => ({
+      work_order_id: `w${i}`, pothole_id: id, stop_order: i + 1,
+      eta: "2026-09-03T08:00:00.000Z", lng: -0.1247, lat: 51.4962, severity: 0.5, photo_url: null,
+    })),
+    total_km: 1, total_minutes: 2, baseline_km: 3,
+    path: { type: "LineString", coordinates: [] },
+  });
   const area: GeoJSON.Polygon = {
     type: "Polygon",
     coordinates: [[[-0.13, 51.49], [-0.12, 51.49], [-0.12, 51.50], [-0.13, 51.50], [-0.13, 51.49]]],
@@ -101,5 +110,18 @@ describe("planCandidates", () => {
     expect(planCandidates(list, { mode: "count", area: null, selectedCount: 0 })).toBe(3);
     expect(planCandidates(list, { mode: "time", area: null, selectedCount: 9 })).toBe(3);
     expect(planCandidates(list, { mode: "count", area, selectedCount: 0 })).toBe(2);
+  });
+  it("the standing plan's own stops still count, so the crew's day can be planned again", () => {
+    // "d" is scheduled: the open queue excludes it, but /api/plan-route replaces
+    // this crew's plan for the date and reads it back in, so it is a candidate.
+    const plan = planOf(["d"]);
+    expect(planCandidates(list, { mode: "count", area: null, selectedCount: 0 }, plan)).toBe(4);
+    expect(planCandidates(list, { mode: "count", area, selectedCount: 0 }, plan)).toBe(3);
+    // A scheduled pothole held by some other crew's plan is still not a candidate.
+    expect(planCandidates(list, { mode: "count", area: null, selectedCount: 0 }, planOf(["zzz"]))).toBe(3);
+    // Repaired stays out however it got onto the plan.
+    expect(planCandidates(list, { mode: "count", area: null, selectedCount: 0 }, planOf(["d", "e"]))).toBe(4);
+    // Manual mode is unchanged: the operator's picks are the input.
+    expect(planCandidates(list, { mode: "manual", area: null, selectedCount: 2 }, plan)).toBe(2);
   });
 });

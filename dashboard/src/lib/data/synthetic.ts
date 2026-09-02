@@ -1,6 +1,6 @@
 import type {
-  ConsoleDataSource, Crew, Detection, LoadResult, PlanRouteRequest, PlanRouteResponse,
-  Pothole, PotholeUpdate, SubscribeHandlers, Vehicle, VehiclePosition,
+  ConsoleDataSource, Crew, Detection, DispatchResult, LoadResult, PlanRouteRequest,
+  PlanRouteResponse, Pothole, PotholeUpdate, SubscribeHandlers, Vehicle, VehiclePosition,
 } from "./types";
 import { potholeRef } from "./types";
 import { priority } from "@/lib/console/derive";
@@ -208,6 +208,9 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
         path: { type: "LineString", coordinates: coords },
       };
     },
-    async dispatch() { await new Promise((r) => setTimeout(r, 600)); },
+    async dispatch(req): Promise<DispatchResult> {
+      await new Promise((r) => setTimeout(r, 600));
+      return { sent: true, crewPage: `/route/${req.route_plan_id}` };
+    },
   };
 }

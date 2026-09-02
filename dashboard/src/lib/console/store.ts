@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
-  ConsoleDataSource, Crew, Detection, PlanRouteRequest, PlanRouteResponse, Pothole, Vehicle,
+  ConsoleDataSource, Crew, Detection, DispatchResult, PlanRouteRequest, PlanRouteResponse,
+  Pothole, Vehicle,
 } from "@/lib/data/types";
 import { FILTER_CYCLE, isSelectable, type Filter } from "./derive";
 
@@ -53,6 +54,12 @@ export interface ConsoleState {
   dispatchState: "idle" | "sending" | "sent" | "error";
   dispatchError?: string;
   dispatchedTo: number;
+  /**
+   * What the dispatch actually did. `sent: false` means the plan is published
+   * but no email went out, which the confirmation has to say rather than
+   * claiming a crew has been emailed.
+   */
+  dispatchResult: DispatchResult | null;
 
   pendingDismiss: { id: string; previous: Pothole; expiresAt: number } | null;
 }
@@ -98,7 +105,7 @@ function tomorrowISO(): string {
   return d.toISOString().slice(0, 10);
 }
 
-export const PLAN_ERROR = "Route service unavailable. The queue is unaffected; try again.";
+export const PLAN_ERROR = "Route service unavailable. Check the connection and try again.";
 /**
  * A plan that came back with no stops. Said as a failure rather than shown as an
  * empty route, because a zero-stop plan on screen beside pins the operator has
@@ -132,6 +139,7 @@ export function createConsoleStore() {
       sheetOpen: false, drawing: false,
       planner: { crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20, area: null, planDate: tomorrowISO() },
       planState: "idle", plan: null, planCrewId: null, dispatchState: "idle", dispatchedTo: 0,
+      dispatchResult: null,
       pendingDismiss: null,
 
       setDataSource(d) { ds = d; },
@@ -243,20 +251,27 @@ export function createConsoleStore() {
             planState: "planned", plan, planCrewId: req.crew_id, selected: [],
             dispatchState: "idle", dispatchedTo: 0,
           });
-        } catch {
-          set({ planState: "error", planError: PLAN_ERROR });
+        } catch (e) {
+          // The endpoint answers with one plain sentence of its own ("That crew
+          // was not found.", "No open potholes match that request."), which is
+          // more use than the generic fallback. postJson rethrows it as the
+          // Error message, so prefer it whenever there is one.
+          set({ planState: "error", planError: e instanceof Error && e.message ? e.message : PLAN_ERROR });
         }
       },
-      resetPlan() { set({ planState: "idle", plan: null, planCrewId: null, planError: undefined, dispatchState: "idle", dispatchError: undefined, dispatchedTo: 0 }); },
+      resetPlan() { set({ planState: "idle", plan: null, planCrewId: null, planError: undefined, dispatchState: "idle", dispatchError: undefined, dispatchedTo: 0, dispatchResult: null }); },
       async dispatch(to) {
         const plan = get().plan;
         if (!ds || !plan) return;
         set({ dispatchState: "sending", dispatchError: undefined });
         try {
-          await ds.dispatch({ route_plan_id: plan.route_plan_id, to });
-          set({ dispatchState: "sent", dispatchedTo: to.length });
-        } catch {
-          set({ dispatchState: "error", dispatchError: DISPATCH_ERROR });
+          const result = await ds.dispatch({ route_plan_id: plan.route_plan_id, to });
+          // Publishing the plan is the state change that matters, and it
+          // happened either way; whether an email went with it is what
+          // `dispatchResult` carries to the confirmation.
+          set({ dispatchState: "sent", dispatchedTo: to.length, dispatchResult: result });
+        } catch (e) {
+          set({ dispatchState: "error", dispatchError: e instanceof Error && e.message ? e.message : DISPATCH_ERROR });
         }
       },
 

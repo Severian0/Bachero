@@ -41,6 +41,17 @@ export interface Detection {
 
 export type PotholeUpdate = Pothole | { id: string; deleted: true };
 
+/**
+ * What the dispatch endpoint answered. `sent` is false when the email service
+ * is not configured: the plan is still published and the crew page still
+ * works, so the console has to say which of the two happened.
+ */
+export interface DispatchResult {
+  sent: boolean;
+  crewPage: string;
+  messageId?: string;
+}
+
 export interface LoadResult {
   potholes: Pothole[];
   vehicles: Vehicle[];
@@ -61,7 +72,7 @@ export interface ConsoleDataSource {
   detections(potholeId: string): Promise<Detection[]>;
   dismiss(potholeId: string): Promise<void>;
   planRoute(req: PlanRouteRequest): Promise<PlanRouteResponse>;
-  dispatch(req: DispatchRequest): Promise<void>;
+  dispatch(req: DispatchRequest): Promise<DispatchResult>;
 }
 
 export function potholeRef(id: string): string {

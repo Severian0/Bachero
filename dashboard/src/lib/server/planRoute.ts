@@ -218,8 +218,19 @@ async function loadQueue(db: SupabaseClient, existing: ExistingPlan): Promise<Po
  * orders and returning their potholes to `confirmed`. The work_orders_sync
  * trigger only moves potholes *into* `scheduled`, so the reset is explicit; a
  * pothole still referenced by another open work order is left alone.
+ *
+ * `keepScheduled` holds the potholes the *new* plan will carry over. Their old
+ * work orders are still cancelled and deleted, but they are not reset: they are
+ * scheduled before and after, so resetting them would emit a pointless
+ * `scheduled → confirmed → scheduled` pair of realtime events that a client can
+ * apply out of order. Only genuinely dropped stops flip.
  */
-async function replaceExistingPlan(db: SupabaseClient, existing: ExistingPlan, nowIso: string): Promise<void> {
+async function replaceExistingPlan(
+  db: SupabaseClient,
+  existing: ExistingPlan,
+  nowIso: string,
+  keepScheduled: ReadonlySet<string>,
+): Promise<void> {
   const { planIds, orders: oldOrders } = existing;
   if (planIds.length === 0) return;
 
@@ -237,7 +248,7 @@ async function replaceExistingPlan(db: SupabaseClient, existing: ExistingPlan, n
         .in("status", OPEN_WORK_ORDER_STATUSES),
     );
     const held = new Set(stillHeld.map((w) => w.pothole_id));
-    const freed = potholeIds.filter((id) => !held.has(id));
+    const freed = potholeIds.filter((id) => !held.has(id) && !keepScheduled.has(id));
     if (freed.length > 0) {
       rows(
         await db
@@ -295,11 +306,18 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
     throw new PlanRouteError(400, "No route could be planned for those stops.");
   }
 
+  // An unreachable cell in the OSRM matrix is Infinity, and the solver will
+  // still seed its first candidate with one. Say so rather than letting the
+  // ETA arithmetic throw a RangeError further down.
+  if (!Number.isFinite(solution.totalMin)) {
+    throw new PlanRouteError(400, "Some of those potholes cannot be reached by road.");
+  }
+
   const ordered = solution.order.map((i) => candidates[i]);
   const line = await osrmCall(osrm.route([depot, ...ordered.map((c): LngLat => [c.lng, c.lat]), depot]));
   const etas = buildEtas(solution.order, matrix, serviceMin, planStartIso(req.plan_date));
 
-  await replaceExistingPlan(db, existing, nowIso);
+  await replaceExistingPlan(db, existing, nowIso, new Set(ordered.map((c) => c.id)));
 
   const totalKm = round1(solution.totalKm);
   const totalMinutes = Math.round(solution.totalMin);
@@ -360,16 +378,22 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
   }
   const idByStop = new Map(workOrders.map((w) => [w.stop_order, w.id]));
 
-  const stops: PlanRouteStop[] = ordered.map((c, i) => ({
-    work_order_id: idByStop.get(i + 1) ?? "",
-    pothole_id: c.id,
-    stop_order: i + 1,
-    eta: etas[i],
-    lng: c.lng,
-    lat: c.lat,
-    severity: c.severity,
-    photo_url: c.photo_url,
-  }));
+  const stops: PlanRouteStop[] = ordered.map((c, i) => {
+    // Guarded by the length check above; an empty string here would hand the
+    // client something that is not a work order id.
+    const workOrderId = idByStop.get(i + 1);
+    if (workOrderId === undefined) throw new PlanRouteError(500, "The database request failed.");
+    return {
+      work_order_id: workOrderId,
+      pothole_id: c.id,
+      stop_order: i + 1,
+      eta: etas[i],
+      lng: c.lng,
+      lat: c.lat,
+      severity: c.severity,
+      photo_url: c.photo_url,
+    };
+  });
 
   return {
     route_plan_id: plan.id,

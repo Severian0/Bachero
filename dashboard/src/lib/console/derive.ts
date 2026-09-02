@@ -1,6 +1,6 @@
-import type { Pothole } from "@/lib/data/types";
+import type { Pothole, PlanRouteResponse } from "@/lib/data/types";
 import type { PotholeStatus } from "@/lib/types";
-import { countInArea } from "./area";
+import { pointInPolygon } from "./area";
 import { coord, plural } from "./format";
 
 export type Filter = "suspected" | "confirmed" | "scheduled" | "all";
@@ -79,12 +79,23 @@ export function estimateMinutes(stops: number, serviceMinPerStop: number): numbe
  * whether "Plan route" can be pressed. Picking stops by hand means the
  * selection; asking for a best N or a time budget means the open queue, narrowed
  * to the drawn area when there is one.
+ *
+ * The standing plan's own stops count too. They are `scheduled`, so the open
+ * queue excludes them — but /api/plan-route replaces a crew's plan for a date
+ * and reads those potholes back in, so without this the button would go dead
+ * the moment a route came back and replanning would be unreachable from here.
  */
 export function planCandidates(
   potholes: Pothole[],
   { mode, area, selectedCount }: { mode: "manual" | "count" | "time"; area: GeoJSON.Polygon | null; selectedCount: number },
+  plan?: PlanRouteResponse | null,
 ): number {
   if (mode === "manual") return selectedCount;
-  if (area) return countInArea(potholes, area);
-  return potholes.filter((p) => p.status === "suspected" || p.status === "confirmed").length;
+  const onPlan = new Set((plan?.stops ?? []).map((s) => s.pothole_id));
+  return potholes.filter((p) => {
+    const open = p.status === "suspected" || p.status === "confirmed";
+    const carried = p.status === "scheduled" && onPlan.has(p.id);
+    if (!open && !carried) return false;
+    return !area || pointInPolygon([p.lng, p.lat], area);
+  }).length;
 }

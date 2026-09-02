@@ -43,6 +43,7 @@ export default function DispatchSheet() {
   const dispatchState = useConsole((s) => s.dispatchState);
   const dispatchError = useConsole((s) => s.dispatchError);
   const dispatchedTo = useConsole((s) => s.dispatchedTo);
+  const dispatchResult = useConsole((s) => s.dispatchResult);
 
   const setPlanner = useConsole((s) => s.setPlanner);
   const setArea = useConsole((s) => s.setArea);
@@ -93,10 +94,14 @@ export default function DispatchSheet() {
   const inArea = countInArea(all, planner.area);
   const candidates = planCandidates(all, {
     mode: planner.mode, area: planner.area, selectedCount: selected.length,
-  });
+  }, plan);
 
   const planned = planState === "planned" && plan ? plan : null;
   const sent = dispatchState === "sent" && planned;
+  // The plan is published either way; `emailed` is the narrower claim, and it
+  // is false whenever the email service is not configured.
+  const emailed = dispatchResult?.sent ?? false;
+  const crewPage = dispatchResult?.crewPage ?? (planned ? `/route/${planned.route_plan_id}` : "");
 
   // Before a route comes back the sheet lists what the operator picked, and
   // only in the mode where those picks are the input; after it, the order the
@@ -169,11 +174,11 @@ export default function DispatchSheet() {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--s4)", padding: "var(--s4) var(--s5)", borderBottom: "1px solid var(--rule-soft)" }}>
           <div>
             <h2 id="dispatch-title" style={{ fontSize: "var(--t-title)", letterSpacing: "-0.015em" }}>
-              {sent ? "Route dispatched" : "Dispatch route to a crew"}
+              {sent ? (emailed ? "Route dispatched" : "Plan published") : "Dispatch route to a crew"}
             </h2>
             <p className="secondary" style={{ margin: "2px 0 0", fontSize: "var(--t-small)" }}>
               {sent
-                ? `Sent by ${OPERATOR.name}, ${OPERATOR.role}`
+                ? `${emailed ? "Sent" : "Published"} by ${OPERATOR.name}, ${OPERATOR.role}`
                 : planned
                   ? `${planned.stops.length} ${planned.stops.length === 1 ? "stop" : "stops"} in the order a crew would drive them`
                   : `Plan for ${planner.planDate}`}
@@ -193,15 +198,24 @@ export default function DispatchSheet() {
                 <Line label="Work order" value={planned.route_plan_id} />
                 <Line label="Crew" value={planCrew?.name ?? "—"} />
                 <Line label="Stops" value={`${planned.stops.length}, ${km(planned.total_km)}, ${minutes(planned.total_minutes)}`} />
-                <Line label="Sent to" value={plural(dispatchedTo, "address", "addresses")} />
+                {emailed && <Line label="Sent to" value={plural(dispatchedTo, "address", "addresses")} />}
               </dl>
               <p style={{ margin: 0, fontSize: "var(--t-small)", lineHeight: 1.5, padding: "var(--s3)", background: "var(--committed-soft)", borderRadius: "var(--r-md)", border: "1px solid var(--committed-edge)" }}>
-                A work order with the route, the coordinates and the detector frames has been emailed to {planCrew?.name ?? "the crew"}.
-                The stops now show as scheduled on the map.
+                {emailed ? (
+                  <>
+                    A work order with the route, the coordinates and the detector frames has been emailed to {planCrew?.name ?? "the crew"}.
+                    The stops now show as scheduled on the map.
+                  </>
+                ) : (
+                  <>
+                    No email was sent because the email service is not configured. Open the crew page link below or add
+                    RESEND_API_KEY and dispatch again. The stops now show as scheduled on the map.
+                  </>
+                )}
               </p>
               <p style={{ margin: 0, fontSize: "var(--t-small)" }}>
                 Crew page:{" "}
-                <a className="data" href={`/route/${planned.route_plan_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--action)" }}>
+                <a className="data" href={crewPage} target="_blank" rel="noreferrer" style={{ color: "var(--action)" }}>
                   /route/{planned.route_plan_id.slice(0, 8)}…
                 </a>
               </p>

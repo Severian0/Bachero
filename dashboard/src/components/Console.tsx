@@ -102,8 +102,8 @@ export default function Console() {
     [planState, plan],
   );
   const candidates = useMemo(
-    () => planCandidates(all, { mode: planner.mode, area: planner.area, selectedCount: selected.length }),
-    [all, planner.mode, planner.area, selected.length],
+    () => planCandidates(all, { mode: planner.mode, area: planner.area, selectedCount: selected.length }, plan),
+    [all, planner.mode, planner.area, selected.length, plan],
   );
   const crewName = crews.find((c) => c.id === planner.crewId)?.name ?? "—";
   // How many open potholes a drawn area holds, so the column can say what the

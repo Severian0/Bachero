@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createConsoleStore, DISMISS_UNDO_MS, EMPTY_PLAN_ERROR } from "./store";
+import { createConsoleStore, DISMISS_UNDO_MS, DISPATCH_ERROR, EMPTY_PLAN_ERROR, PLAN_ERROR } from "./store";
 import type { ConsoleDataSource, Pothole } from "@/lib/data/types";
 
 const base: Pothole = {
@@ -18,7 +18,7 @@ function fakeDs(over: Partial<ConsoleDataSource> = {}): ConsoleDataSource {
     detections: vi.fn(async () => []),
     dismiss: vi.fn(async () => {}),
     planRoute: vi.fn(async () => ({ route_plan_id: "r1", stops: [{ work_order_id: "w1", pothole_id: "a", stop_order: 1, eta: "2026-09-03T08:20:00.000Z", lng: -0.12, lat: 51.49, severity: 0.5, photo_url: null }], total_km: 1, total_minutes: 2, baseline_km: 3, path: { type: "LineString" as const, coordinates: [] } })),
-    dispatch: vi.fn(async () => {}),
+    dispatch: vi.fn(async () => ({ sent: true, crewPage: "/route/r1" })),
     ...over,
   };
 }
@@ -224,14 +224,61 @@ describe("console store", () => {
     expect(s.getState().selected).toEqual(["a"]);
   });
 
-  it("planRoute failure stores one sentence and returns to idle", async () => {
-    const ds = fakeDs({ planRoute: vi.fn(async () => { throw new Error("OSRM 429"); }) });
+  it("planRoute failure prefers the server's own sentence, and falls back when there is none", async () => {
     const s = createConsoleStore();
-    s.getState().setDataSource(ds);
     s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+
+    // /api/plan-route answers one plain sentence; it is more use than the fallback.
+    s.getState().setDataSource(fakeDs({ planRoute: vi.fn(async () => { throw new Error("That crew was not found."); }) }));
     await s.getState().planRoute();
     expect(s.getState().planState).toBe("error");
-    expect(s.getState().planError).toBe("Route service unavailable. The queue is unaffected; try again.");
+    expect(s.getState().planError).toBe("That crew was not found.");
+
+    // A throw with nothing to say (the synthetic source never throws at all).
+    s.getState().setDataSource(fakeDs({ planRoute: vi.fn(async () => { throw new Error(""); }) }));
+    await s.getState().planRoute();
+    expect(s.getState().planError).toBe(PLAN_ERROR);
+  });
+
+  it("dispatch keeps the result, so the confirmation can say whether an email went out", async () => {
+    const s = createConsoleStore();
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setDataSource(fakeDs({
+      dispatch: vi.fn(async () => ({ sent: false, crewPage: "http://localhost:3000/route/r1" })),
+    }));
+    s.getState().upsertPothole(base);
+    s.getState().toggleSelected("a");
+    await s.getState().planRoute();
+    await s.getState().dispatch(["crew@example.com"]);
+
+    // The plan is published either way, so the state is still "sent"; what the
+    // sheet reads to choose its wording is the result.
+    expect(s.getState().dispatchState).toBe("sent");
+    expect(s.getState().dispatchedTo).toBe(1);
+    expect(s.getState().dispatchResult).toEqual({ sent: false, crewPage: "http://localhost:3000/route/r1" });
+
+    s.getState().resetPlan();
+    expect(s.getState().dispatchResult).toBeNull();
+    expect(s.getState().dispatchState).toBe("idle");
+  });
+
+  it("dispatch failure prefers the server's own sentence, and falls back when there is none", async () => {
+    const s = createConsoleStore();
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setDataSource(fakeDs({
+      dispatch: vi.fn(async () => { throw new Error("That route plan was not found."); }),
+    }));
+    s.getState().upsertPothole(base);
+    s.getState().toggleSelected("a");
+    await s.getState().planRoute();
+    await s.getState().dispatch(["crew@example.com"]);
+    expect(s.getState().dispatchState).toBe("error");
+    expect(s.getState().dispatchError).toBe("That route plan was not found.");
+    expect(s.getState().dispatchResult).toBeNull();
+
+    s.getState().setDataSource(fakeDs({ dispatch: vi.fn(async () => { throw new Error(""); }) }));
+    await s.getState().dispatch(["crew@example.com"]);
+    expect(s.getState().dispatchError).toBe(DISPATCH_ERROR);
   });
 
   it("upsertVehicle keeps a trail of at most 5", () => {

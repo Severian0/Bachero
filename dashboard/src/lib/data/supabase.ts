@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Crew, PotholeMapRow, VehiclePositionRow } from "@/lib/types";
-import type { ConsoleDataSource, Detection, LoadResult, Vehicle } from "./types";
+import type { ConsoleDataSource, Detection, DispatchResult, LoadResult, Vehicle } from "./types";
 import { toPothole, toVehicle } from "./types";
 
 export function startOfTodayISO(): string {
@@ -95,6 +95,15 @@ export function createSupabaseSource(client: SupabaseClient): ConsoleDataSource 
     },
 
     planRoute: (req) => postJson("/api/plan-route", req),
-    async dispatch(req) { await postJson("/api/dispatch", req); },
+    async dispatch(req): Promise<DispatchResult> {
+      // The endpoint publishes the plan whether or not the email went out, so
+      // the console needs `sent` and the crew page link, not just a resolved
+      // promise. Field names are snake_case on the wire.
+      const res = await postJson<{ sent: boolean; crew_page: string; message_id?: string }>("/api/dispatch", req);
+      return {
+        sent: res.sent, crewPage: res.crew_page,
+        ...(res.message_id === undefined ? {} : { messageId: res.message_id }),
+      };
+    },
   };
 }
