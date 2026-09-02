@@ -1,17 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Header from "./Header";
 import PotholeMap from "./PotholeMap";
-import OperationsColumn from "./OperationsColumn";
+import OperationsColumn, { type PlannedRoute } from "./OperationsColumn";
 import RecordPanel from "./RecordPanel";
 import DispatchSheet from "./DispatchSheet";
-import { planRoute } from "@/lib/route";
-import { toRecord } from "@/lib/model";
-import type { FilterKey } from "@/lib/model";
-import { useConsole } from "@/lib/console/store";
+import { DISMISS_UNDO_MS, useConsole } from "@/lib/console/store";
 import { handleKey } from "@/lib/console/keyboard";
-import { displayName, stats, visibleRows } from "@/lib/console/derive";
+import {
+  displayName, estimateMinutes, planCandidates, stats, visibleRows, type ChipFilter,
+} from "@/lib/console/derive";
 import { createDataSource, isSupabaseConfigured } from "@/lib/data";
 
 /**
@@ -25,12 +24,18 @@ import { createDataSource, isSupabaseConfigured } from "@/lib/data";
  */
 export default function Console() {
   const potholes = useConsole((s) => s.potholes);
+  const detections = useConsole((s) => s.detections);
+  const crews = useConsole((s) => s.crews);
+  const kmToday = useConsole((s) => s.kmToday);
   const filter = useConsole((s) => s.filter);
   const linkedId = useConsole((s) => s.linkedId);
   const pinnedId = useConsole((s) => s.pinnedId);
   const selected = useConsole((s) => s.selected);
   const sheetOpen = useConsole((s) => s.sheetOpen);
   const drawing = useConsole((s) => s.drawing);
+  const planner = useConsole((s) => s.planner);
+  const planState = useConsole((s) => s.planState);
+  const plan = useConsole((s) => s.plan);
   const pendingDismiss = useConsole((s) => s.pendingDismiss);
   const loadState = useConsole((s) => s.loadState);
 
@@ -48,13 +53,12 @@ export default function Console() {
 
   // The store's `open` grouping has no chip of its own in this column; it is
   // the whole queue minus what has been closed, which reads as All.
-  const filterKey: FilterKey = filter === "open" ? "all" : filter;
+  const filterKey: ChipFilter = filter === "open" ? "all" : filter;
 
   const all = useMemo(() => Object.values(potholes), [potholes]);
-  const queue = useMemo(() => visibleRows(all, filter), [all, filter]);
-  const rows = useMemo(() => queue.map(toRecord), [queue]);
+  const rows = useMemo(() => visibleRows(all, filter), [all, filter]);
 
-  const counts = useMemo<Record<FilterKey, number>>(() => {
+  const counts = useMemo<Record<ChipFilter, number>>(() => {
     const s = stats(all);
     return {
       all: all.filter((p) => p.status !== "false_positive").length,
@@ -65,18 +69,37 @@ export default function Console() {
   }, [all]);
 
   const routeIds = useMemo(() => new Set(selected), [selected]);
-
-  const opened = useMemo(() => {
-    const p = pinnedId ? potholes[pinnedId] : undefined;
-    return p && p.status !== "false_positive" ? toRecord(p) : null;
-  }, [pinnedId, potholes]);
-
-  const route = useMemo(
-    () => planRoute(selected.map((id) => potholes[id]).filter((p) => p != null).map(toRecord)),
+  const stops = useMemo(
+    () => selected.map((id) => potholes[id]).filter((p) => p != null),
     [selected, potholes],
   );
 
+  const opened = useMemo(() => {
+    const p = pinnedId ? potholes[pinnedId] : undefined;
+    return p && p.status !== "false_positive" ? p : null;
+  }, [pinnedId, potholes]);
+
+  // The bottom bar states what is committed and what it would cost: the
+  // console's own estimate while the operator is still choosing, the routing
+  // service's own figures once a route has come back.
+  const planned = useMemo<PlannedRoute | null>(
+    () => (planState === "planned" && plan
+      ? { stops: plan.stops.length, km: plan.total_km, minutes: plan.total_minutes }
+      : null),
+    [planState, plan],
+  );
+  const candidates = useMemo(
+    () => planCandidates(all, { mode: planner.mode, area: planner.area, selectedCount: selected.length }),
+    [all, planner.mode, planner.area, selected.length],
+  );
+  const crewName = crews.find((c) => c.id === planner.crewId)?.name ?? "—";
+
   const linkFromRow = useCallback((id: string | null) => (id ? link(id, "row") : unlink()), [link, unlink]);
+
+  const clearRoute = useCallback(() => {
+    clearSelection();
+    if (planState === "planned") resetPlan();
+  }, [clearSelection, planState, resetPlan]);
 
   // Dispatch is not yet wired to the work-order service, so sending closes the
   // sheet and drops the proposed plan. The store's own dispatch replaces this.
@@ -91,10 +114,10 @@ export default function Console() {
   // stands down while either is in progress.
   useEffect(() => {
     if (sheetOpen || drawing) return;
-    const onKey = (e: KeyboardEvent) => { handleKey(e, useConsole.getState(), queue); };
+    const onKey = (e: KeyboardEvent) => { handleKey(e, useConsole.getState(), rows); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [queue, sheetOpen, drawing]);
+  }, [rows, sheetOpen, drawing]);
 
   // The live data source: Supabase where it is configured, the synthetic fleet
   // otherwise. Mounted once, and the subscription is torn down with the screen.
@@ -138,6 +161,7 @@ export default function Console() {
           {opened ? (
             <RecordPanel
               pothole={opened}
+              detections={detections[opened.id]}
               onRoute={routeIds.has(opened.id)}
               onBack={unpin}
               onToggleRoute={() => toggleSelected(opened.id)}
@@ -153,10 +177,14 @@ export default function Console() {
               routeIds={routeIds}
               onLink={linkFromRow}
               onOpen={pin}
-              routeKm={route.km}
-              routeMinutes={route.minutes}
+              kmToday={kmToday}
+              estimatedMinutes={estimateMinutes(selected.length, planner.serviceMinPerStop)}
+              crewName={crewName}
+              canPlan={candidates > 0}
+              planning={planState === "planning"}
+              planned={planned}
               onPlanRoute={() => setSheetOpen(true)}
-              onClearRoute={clearSelection}
+              onClearRoute={clearRoute}
             />
           )}
         </aside>
@@ -164,9 +192,8 @@ export default function Console() {
 
       {sheetOpen && (
         <DispatchSheet
-          stops={route.stops}
-          km={route.km}
-          minutes={route.minutes}
+          stops={stops}
+          crews={crews}
           onRemove={toggleSelected}
           onClose={() => setSheetOpen(false)}
           onSent={onDispatched}
@@ -190,6 +217,7 @@ export default function Console() {
             borderRadius: "var(--r-md)",
             boxShadow: "var(--shadow-2)",
             animation: "bch-rise 180ms var(--ease) both",
+            overflow: "hidden",
           }}
         >
           <p style={{ margin: 0, fontSize: "var(--t-small)" }}>
@@ -212,8 +240,41 @@ export default function Console() {
           >
             Undo
           </button>
+          <UndoBar key={pendingDismiss.id} expiresAt={pendingDismiss.expiresAt} />
         </div>
       )}
     </div>
+  );
+}
+
+const remainingFor = (expiresAt: number) => Math.max(0, (expiresAt - Date.now()) / DISMISS_UNDO_MS);
+
+/**
+ * How long is left to undo, drawn honestly rather than left to a silent timer.
+ *
+ * Keyed by dismissal id at the call site so a new dismissal replacing an
+ * in-flight one remounts this bar: its initial width is then computed fresh
+ * (lazy useState initialiser, not a setState inside the effect) instead of
+ * holding the previous countdown's value until the next tick.
+ */
+function UndoBar({ expiresAt }: { expiresAt: number }) {
+  const [remaining, setRemaining] = useState(() => remainingFor(expiresAt));
+  useEffect(() => {
+    const t = setInterval(() => setRemaining(remainingFor(expiresAt)), 100);
+    return () => clearInterval(t);
+  }, [expiresAt]);
+  return (
+    <i
+      aria-hidden
+      style={{
+        position: "absolute",
+        left: 0,
+        bottom: 0,
+        height: 2,
+        width: `${remaining * 100}%`,
+        background: "var(--rail-ink-2)",
+        transition: "width 100ms linear",
+      }}
+    />
   );
 }

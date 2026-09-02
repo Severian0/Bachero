@@ -1,29 +1,20 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { MOCK_KM_SCANNED } from "@/lib/fixtures";
+import {
+  displayName, evidenceLine, priority, severityGrade, type ChipFilter,
+  FILTER_CYCLE, FILTER_LABELS,
+} from "@/lib/console/derive";
+import { km as kmOf, minutes as minutesOf } from "@/lib/console/format";
 import { severityFill, STATUS_VISUAL } from "@/lib/console/visual";
-import type { FilterKey, Pothole } from "@/lib/model";
+import type { Pothole } from "@/lib/data/types";
 
-/**
- * State the measurement, then the inference.
- *
- * Local to this column while it still takes the record shape from
- * `lib/model`; Task 3 moves it onto `derive.evidenceLine`, which says the
- * same thing about our own `Pothole`.
- */
-function evidenceLine(p: Pothole): string {
-  const v = `${p.vehicleCount} ${p.vehicleCount === 1 ? "vehicle" : "vehicles"}`;
-  const s = `${p.passCount} ${p.passCount === 1 ? "pass" : "passes"}`;
-  return `${v}, ${s}, last ${p.lastSeenIso.slice(11, 16)}`;
+/** What the console has committed to a crew, once the solver has answered. */
+export interface PlannedRoute {
+  stops: number;
+  km: number;
+  minutes: number;
 }
-
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "confirmed", label: "Confirmed" },
-  { key: "suspected", label: "Suspected" },
-  { key: "scheduled", label: "Scheduled" },
-];
 
 export default function OperationsColumn({
   rows,
@@ -34,21 +25,31 @@ export default function OperationsColumn({
   routeIds,
   onLink,
   onOpen,
-  routeKm,
-  routeMinutes,
+  kmToday,
+  estimatedMinutes,
+  crewName,
+  canPlan,
+  planning,
+  planned,
   onPlanRoute,
   onClearRoute,
 }: {
   rows: Pothole[];
-  counts: Record<FilterKey, number>;
-  filter: FilterKey;
-  onFilter: (f: FilterKey) => void;
+  counts: Record<ChipFilter, number>;
+  filter: ChipFilter;
+  onFilter: (f: ChipFilter) => void;
   linkedId: string | null;
   routeIds: Set<string>;
   onLink: (id: string | null) => void;
   onOpen: (id: string) => void;
-  routeKm: number;
-  routeMinutes: number;
+  /** Network the fleet has covered today, from the live source. */
+  kmToday: number;
+  /** The console's own estimate for the current selection, before a plan. */
+  estimatedMinutes: number;
+  crewName: string;
+  canPlan: boolean;
+  planning: boolean;
+  planned: PlannedRoute | null;
   onPlanRoute: () => void;
   onClearRoute: () => void;
 }) {
@@ -63,18 +64,20 @@ export default function OperationsColumn({
       ?.scrollIntoView({ block: "nearest" });
   }, [linkedId]);
 
+  const n = routeIds.size;
+
   return (
     <div style={{ display: "grid", gridTemplateRows: "auto auto auto minmax(0,1fr) auto", minHeight: 0, background: "var(--surface)" }}>
       {/* Measurements, each attached to the thing it measures. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", borderBottom: "1px solid var(--rule-soft)" }}>
         <Metric value={String(counts.confirmed)} label="Confirmed, awaiting a route" tone="action" />
         <Metric value={String(counts.suspected)} label="Suspected, one vehicle" />
-        <Metric value={MOCK_KM_SCANNED.toFixed(0)} unit="km" label="Network scanned today" last />
+        <Metric value={kmToday.toFixed(0)} unit="km" label="Network scanned today" last />
       </div>
 
       {/* Filter chips. These filter the map as well as the list. */}
       <div role="group" aria-label="Filter the repair queue" style={{ display: "flex", gap: 6, padding: "var(--s3) var(--s4)", borderBottom: "1px solid var(--rule-soft)" }}>
-        {FILTERS.map(({ key, label }) => {
+        {FILTER_CYCLE.map((key) => {
           const on = filter === key;
           return (
             <button
@@ -99,7 +102,7 @@ export default function OperationsColumn({
                 transition: "background 120ms linear, border-color 120ms linear",
               }}
             >
-              {label}
+              {FILTER_LABELS[key]}
               <span className="data" style={{ fontSize: 11, opacity: on ? 0.85 : 0.6 }}>
                 {counts[key]}
               </span>
@@ -140,29 +143,42 @@ export default function OperationsColumn({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--s3)", padding: "var(--s3) var(--s4)", borderTop: "1px solid var(--rule)", background: "var(--canvas)" }}>
         <div style={{ minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: "var(--t-small)", fontWeight: 600 }}>
-            {routeIds.size === 0
-              ? "No repairs on the route"
-              : `${routeIds.size} ${routeIds.size === 1 ? "repair" : "repairs"} on the route`}
+            {planned
+              ? `Route planned · ${planned.stops} stops · ${kmOf(planned.km)} · ${minutesOf(planned.minutes)}`
+              : n === 0
+                ? "No repairs on the route"
+                : `${n} selected for tomorrow`}
           </p>
           <p className="secondary" style={{ margin: 0, fontSize: "var(--t-small)" }}>
-            {routeIds.size === 0 ? (
+            {planned ? (
+              <Clear onClearRoute={onClearRoute} />
+            ) : n === 0 ? (
               "Open a record to add it."
             ) : (
               <>
-                <span className="data">{routeKm.toFixed(1)} km</span>, about{" "}
-                <span className="data">{routeMinutes} min</span>.{" "}
-                <button type="button" onClick={onClearRoute} style={{ border: 0, background: "none", padding: 0, color: "var(--action)", fontWeight: 600, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}>
-                  Clear
-                </button>
+                <span className="data">~{estimatedMinutes} min</span> including travel · crew {crewName}.{" "}
+                <Clear onClearRoute={onClearRoute} />
               </>
             )}
           </p>
         </div>
-        <button type="button" className="btn btn-primary" disabled={routeIds.size === 0} onClick={onPlanRoute}>
-          Plan route
+        <button type="button" className="btn btn-primary" disabled={!canPlan || planning} onClick={onPlanRoute}>
+          {planning ? "Planning…" : "Plan route"}
         </button>
       </div>
     </div>
+  );
+}
+
+function Clear({ onClearRoute }: { onClearRoute: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClearRoute}
+      style={{ border: 0, background: "none", padding: 0, color: "var(--action)", fontWeight: 600, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
+    >
+      Clear
+    </button>
   );
 }
 
@@ -180,6 +196,7 @@ function QueueRow({
   onOpen: (id: string) => void;
 }) {
   const v = STATUS_VISUAL[pothole.status];
+  const grade = severityGrade(pothole.severity);
   return (
     <li data-row={pothole.id}>
       <button
@@ -209,25 +226,25 @@ function QueueRow({
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: "flex", alignItems: "baseline", gap: "var(--s2)" }}>
             <span style={{ fontSize: "var(--t-body)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {pothole.street}
+              {displayName(pothole)}
             </span>
             <span className="data secondary" style={{ fontSize: 11, flexShrink: 0 }}>
               {pothole.ref}
             </span>
           </span>
           <span className="secondary" style={{ display: "block", marginTop: 1, fontSize: "var(--t-small)", lineHeight: 1.35 }}>
-            {v.label}. {evidenceLine(pothole)}
+            {evidenceLine(pothole)}
           </span>
         </span>
 
-        <span aria-label={`Severity ${pothole.severity} of 4`} style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+        <span aria-label={`Severity ${grade} of 4`} style={{ display: "flex", gap: 2, flexShrink: 0 }}>
           {[1, 2, 3, 4].map((s) => (
-            <i key={s} style={{ display: "block", width: 8, height: 16, borderRadius: 1, background: severityFill(pothole.severity, s <= pothole.severity) }} />
+            <i key={s} style={{ display: "block", width: 8, height: 16, borderRadius: 1, background: severityFill(grade, s <= grade) }} />
           ))}
         </span>
 
         <span className="data" style={{ width: 26, textAlign: "right", fontSize: "var(--t-body)", fontWeight: 600, flexShrink: 0 }}>
-          {pothole.priority}
+          {priority(pothole).toFixed(1)}
         </span>
       </button>
     </li>

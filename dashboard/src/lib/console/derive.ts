@@ -1,10 +1,14 @@
 import type { Pothole } from "@/lib/data/types";
 import type { PotholeStatus } from "@/lib/types";
+import { haversineKm } from "@/lib/solver/haversine";
+import { countInArea } from "./area";
 import { coord, hhmm, monthsSince, plural } from "./format";
 
 export type Filter = "open" | "suspected" | "confirmed" | "scheduled" | "all";
+/** The four the column offers as chips. `open` is a grouping with no chip. */
+export type ChipFilter = Exclude<Filter, "open">;
 /** Chip order, and the order the f key steps through. */
-export const FILTER_CYCLE: Filter[] = ["all", "confirmed", "suspected", "scheduled"];
+export const FILTER_CYCLE: ChipFilter[] = ["all", "confirmed", "suspected", "scheduled"];
 export const FILTER_LABELS: Record<Filter, string> = {
   open: "Open", suspected: "Suspected", confirmed: "Confirmed", scheduled: "Scheduled", all: "All",
 };
@@ -12,29 +16,12 @@ export const STATUS_LABEL: Record<PotholeStatus, string> = {
   suspected: "Suspected", confirmed: "Confirmed", scheduled: "Scheduled", repaired: "Repaired", false_positive: "Dismissed",
 };
 
-/** Flags a queue row reads from the store. Pins take theirs from `./visual`. */
-type Flags = { linked: boolean; selected: boolean };
-
 /** Mirrors potholes_map.priority: severity × ln(1 + vehicles) × (1 + age in 30-day months). */
 export function priority(
   p: Pick<Pothole, "severity" | "distinct_vehicles" | "first_detected_at">, now: Date = new Date(),
 ): number {
   const ageMonths = (now.getTime() - new Date(p.first_detected_at).getTime()) / 86_400_000 / 30;
   return p.severity * Math.log(1 + p.distinct_vehicles) * (1 + ageMonths);
-}
-
-export interface RowStyle { mark: string; bg: string; priColor: string }
-
-export function rowStyle(p: Pothole, { linked, selected }: Flags): RowStyle {
-  let mark = "var(--color-neutral-400)";
-  if (p.status === "confirmed") mark = "var(--color-accent)";
-  if (p.status === "scheduled") mark = "var(--color-accent-800)";
-  if (p.status === "repaired") mark = "var(--color-neutral-300)";
-  return {
-    mark,
-    bg: selected ? "var(--color-accent-100)" : linked ? "var(--ink-5)" : "transparent",
-    priColor: selected || linked ? "var(--color-accent-800)" : "var(--ink-72)",
-  };
 }
 
 /**
@@ -89,3 +76,45 @@ export function stats(potholes: Pothole[]) {
 
 export const isSelectable = (p: Pothole) =>
   p.status === "suspected" || p.status === "confirmed" || p.status === "scheduled";
+
+/** Minutes per stop of travel the console assumes before the solver has run. */
+const TRAVEL_MIN_PER_STOP = 6.5;
+
+/**
+ * The console's own estimate of a day's work before a route has been planned:
+ * the crew's service time per stop, plus a flat travel allowance. Deliberately
+ * crude and labelled as an estimate, because the real figure comes back from
+ * the routing service with the plan.
+ */
+export function estimateMinutes(stops: number, serviceMinPerStop: number): number {
+  return stops * serviceMinPerStop + Math.round(stops * TRAVEL_MIN_PER_STOP);
+}
+
+/**
+ * How many potholes the solver would have to work with, which is what decides
+ * whether "Plan route" can be pressed. Picking stops by hand means the
+ * selection; asking for a best N or a time budget means the open queue, narrowed
+ * to the drawn area when there is one.
+ */
+export function planCandidates(
+  potholes: Pothole[],
+  { mode, area, selectedCount }: { mode: "manual" | "count" | "time"; area: GeoJSON.Polygon | null; selectedCount: number },
+): number {
+  if (mode === "manual") return selectedCount;
+  if (area) return countInArea(potholes, area);
+  return potholes.filter((p) => p.status === "suspected" || p.status === "confirmed").length;
+}
+
+/**
+ * Straight-line distance along a list of stops, in the order they are listed,
+ * which is the order a crew would drive them. Deliberately not a road
+ * distance: it is the honest back-of-envelope figure the console quotes while
+ * the operator is still choosing, and the sheet says so in as many words.
+ */
+export function straightLineKm(stops: Pick<Pothole, "lng" | "lat">[]): number {
+  let total = 0;
+  for (let i = 1; i < stops.length; i += 1) {
+    total += haversineKm([stops[i - 1].lng, stops[i - 1].lat], [stops[i].lng, stops[i].lat]);
+  }
+  return total;
+}

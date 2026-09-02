@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type {
   ConsoleDataSource, Crew, Detection, PlanRouteRequest, PlanRouteResponse, Pothole, Vehicle,
 } from "@/lib/data/types";
-import { FILTER_CYCLE, isSelectable, type Filter } from "./derive";
+import { FILTER_CYCLE, isSelectable, type ChipFilter, type Filter } from "./derive";
 
 export type LinkSource = "row" | "map" | "keys";
 export type Mode = "manual" | "count" | "time";
@@ -199,7 +199,7 @@ export function createConsoleStore() {
       clearSelection() { set({ selected: [] }); },
       setFilter(filter) { set({ filter }); },
       cycleFilter() {
-        const i = FILTER_CYCLE.indexOf(get().filter);
+        const i = FILTER_CYCLE.indexOf(get().filter as ChipFilter);
         set({ filter: FILTER_CYCLE[(i + 1) % FILTER_CYCLE.length] });
       },
       setDensity(density) { set({ density }); },

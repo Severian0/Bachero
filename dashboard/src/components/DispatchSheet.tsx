@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CREWS } from "@/lib/fixtures";
 import { OPERATOR } from "@/lib/console/branding";
-import { CREW_KM_PER_HOUR, MINUTES_ON_SITE } from "@/lib/route";
+import { displayName, severityGrade, straightLineKm } from "@/lib/console/derive";
 import { SEVERITY_WORD, STATUS_VISUAL } from "@/lib/console/visual";
-import type { Crew, Pothole } from "@/lib/model";
+import type { Crew, Pothole } from "@/lib/data/types";
+
+/**
+ * Crew assumptions. These are printed in the sheet rather than buried here,
+ * because the officer who quotes the resulting figure at committee has to be
+ * able to defend where it came from.
+ */
+const CREW_KM_PER_HOUR = 21;
+const MINUTES_ON_SITE = 22;
 
 /**
  * Committing a crew's day is the accountable act in this product, so it is
@@ -15,26 +22,29 @@ import type { Crew, Pothole } from "@/lib/model";
  */
 export default function DispatchSheet({
   stops,
-  km,
-  minutes,
+  crews,
   onRemove,
   onClose,
   onSent,
 }: {
   stops: Pothole[];
-  km: number;
-  minutes: number;
+  crews: Crew[];
   onRemove: (id: string) => void;
   onClose: () => void;
   onSent: (crew: Crew, reference: string) => void;
 }) {
-  const [crewId, setCrewId] = useState(CREWS.find((c) => c.available)?.id ?? CREWS[0].id);
+  const [picked, setPicked] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<{ crew: Crew; reference: string; at: string } | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // The crews arrive with the data load, so the pick falls back to the first
+  // crew on the list until the operator has chosen one.
+  const crewId = picked !== null && crews.some((c) => c.id === picked) ? picked : crews[0]?.id ?? "";
   const unconfirmed = stops.filter((s) => s.status === "suspected");
+  const km = straightLineKm(stops);
+  const minutes = Math.round((km / CREW_KM_PER_HOUR) * 60 + stops.length * MINUTES_ON_SITE);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -64,7 +74,8 @@ export default function DispatchSheet({
   }, [onClose]);
 
   function send() {
-    const crew = CREWS.find((c) => c.id === crewId)!;
+    const crew = crews.find((c) => c.id === crewId);
+    if (!crew) return;
     setSending(true);
     window.setTimeout(() => {
       const d = new Date();
@@ -135,12 +146,12 @@ export default function DispatchSheet({
             <>
               <dl style={{ margin: 0, display: "grid", gap: "var(--s2)" }}>
                 <Line label="Work order" value={sent.reference} />
-                <Line label="Crew" value={`${sent.crew.name}, ${sent.crew.depot}`} />
+                <Line label="Crew" value={sent.crew.name} />
                 <Line label="Dispatched" value={`${sent.at} today`} />
                 <Line label="Stops" value={`${stops.length}, ${km.toFixed(1)} km, about ${minutes} min`} />
               </dl>
               <p style={{ margin: 0, fontSize: "var(--t-small)", lineHeight: 1.5, padding: "var(--s3)", background: "var(--committed-soft)", borderRadius: "var(--r-md)", border: "1px solid var(--committed-edge)" }}>
-                A work order with the route, the coordinates and the detector frames has been emailed to {sent.crew.depot}.
+                A work order with the route, the coordinates and the detector frames has been emailed to {sent.crew.name}.
                 The stops now show as scheduled on the map.
               </p>
             </>
@@ -162,9 +173,9 @@ export default function DispatchSheet({
                       {i + 1}
                     </span>
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: "var(--t-small)", fontWeight: 600 }}>{s.street}</span>
+                      <span style={{ display: "block", fontSize: "var(--t-small)", fontWeight: 600 }}>{displayName(s)}</span>
                       <span className="secondary" style={{ display: "block", fontSize: 11 }}>
-                        <span className="data">{s.ref}</span>, {SEVERITY_WORD[s.severity].toLowerCase()}, {STATUS_VISUAL[s.status].label.toLowerCase()}
+                        <span className="data">{s.ref}</span>, {SEVERITY_WORD[severityGrade(s.severity)].toLowerCase()}, {STATUS_VISUAL[s.status].label.toLowerCase()}
                       </span>
                     </span>
                     <button type="button" className="btn btn-quiet btn-sm" onClick={() => onRemove(s.id)}>
@@ -179,7 +190,7 @@ export default function DispatchSheet({
                   <strong style={{ fontWeight: 600 }}>
                     {unconfirmed.length} {unconfirmed.length === 1 ? "stop is" : "stops are"} suspected only.
                   </strong>{" "}
-                  {unconfirmed.map((s) => s.street).join(", ")} {unconfirmed.length === 1 ? "has" : "have"} been seen by
+                  {unconfirmed.map(displayName).join(", ")} {unconfirmed.length === 1 ? "has" : "have"} been seen by
                   one vehicle and not corroborated. Sending a crew to an unconfirmed defect is your decision to record.
                 </p>
               )}
@@ -189,7 +200,7 @@ export default function DispatchSheet({
                   Send to
                 </legend>
                 <div style={{ display: "grid", gap: 6 }}>
-                  {CREWS.map((c) => (
+                  {crews.map((c) => (
                     <label
                       key={c.id}
                       style={{
@@ -200,8 +211,7 @@ export default function DispatchSheet({
                         border: `1px solid ${crewId === c.id ? "var(--action)" : "var(--rule)"}`,
                         background: crewId === c.id ? "var(--action-soft)" : "var(--surface)",
                         borderRadius: "var(--r-md)",
-                        cursor: c.available ? "pointer" : "not-allowed",
-                        opacity: c.available ? 1 : 0.55,
+                        cursor: "pointer",
                       }}
                     >
                       <input
@@ -209,14 +219,10 @@ export default function DispatchSheet({
                         name="crew"
                         value={c.id}
                         checked={crewId === c.id}
-                        disabled={!c.available}
-                        onChange={() => setCrewId(c.id)}
+                        onChange={() => setPicked(c.id)}
                         style={{ accentColor: "var(--action)", width: 16, height: 16 }}
                       />
                       <span style={{ flex: 1, fontSize: "var(--t-small)", fontWeight: 600 }}>{c.name}</span>
-                      <span className="secondary" style={{ fontSize: "var(--t-small)" }}>
-                        {c.available ? c.depot : "Not available today"}
-                      </span>
                     </label>
                   ))}
                 </div>
@@ -249,8 +255,8 @@ export default function DispatchSheet({
               <button type="button" className="btn btn-secondary" onClick={onClose}>
                 Cancel
               </button>
-              <button type="button" className="btn btn-commit" onClick={send} disabled={sending || stops.length === 0}>
-                {sending ? "Sending" : `Send to ${CREWS.find((c) => c.id === crewId)?.name}`}
+              <button type="button" className="btn btn-commit" onClick={send} disabled={sending || stops.length === 0 || !crewId}>
+                {sending ? "Sending" : `Send to ${crews.find((c) => c.id === crewId)?.name ?? "a crew"}`}
               </button>
             </>
           )}

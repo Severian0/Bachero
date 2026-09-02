@@ -15,6 +15,11 @@ export function plural(n: number, singular: string, pluralWord = singular + "s")
 
 export const pct = (fraction: number) => `${Math.round(fraction * 100)}%`;
 
+/** The calendar day, in the same UTC frame the records are stamped in. */
+export function todayISO(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
 /** Age in 30-day months, 1 decimal. */
 export function monthsSince(iso: string, now: Date = new Date()): number {
   const days = (now.getTime() - new Date(iso).getTime()) / 86_400_000;

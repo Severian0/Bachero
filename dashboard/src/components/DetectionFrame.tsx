@@ -1,30 +1,40 @@
-import type { Pothole } from "@/lib/model";
+import { displayName, severityGrade } from "@/lib/console/derive";
+import type { Pothole } from "@/lib/data/types";
+
+/*
+ * The frame is a picture, not chrome, so it is drawn in its own two values
+ * rather than the console palette: a dark carriageway derived from the ink
+ * token, and the detector's own marks in white.
+ */
+const SURFACE = "color-mix(in srgb, var(--ink) 88%, var(--rule))";
+const MARK = "var(--rail-ink)";
 
 /**
  * The evidence slot.
  *
  * When the detector project is connected this is the captured frame from the
  * vehicle. Until then it draws the detector's own output instead of a stock
- * photograph: the road surface, the accepted bounding box, and the model's
- * confidence. Inventing a photograph of a defect that was never photographed
- * would be a fabricated record, and this console is quoted at committee.
+ * photograph: the road surface and the accepted bounding box. Inventing a
+ * photograph of a defect that was never photographed would be a fabricated
+ * record, and this console is quoted at committee.
  */
 export default function DetectionFrame({ pothole }: { pothole: Pothole }) {
-  if (pothole.imageUrl) {
+  if (pothole.photo_url) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={pothole.imageUrl}
-        alt={`Captured defect on ${pothole.street}`}
+        src={pothole.photo_url}
+        alt={`Captured defect on ${displayName(pothole)}`}
         style={{ display: "block", width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: "var(--r-md)" }}
       />
     );
   }
 
   const specks = aggregate(pothole.id);
+  const grade = severityGrade(pothole.severity);
 
-  const w = 66 + pothole.severity * 16;
-  const h = 34 + pothole.severity * 9;
+  const w = 66 + grade * 16;
+  const h = 34 + grade * 9;
   const x = 160 - w / 2;
   const y = 92 - h / 2;
 
@@ -32,24 +42,20 @@ export default function DetectionFrame({ pothole }: { pothole: Pothole }) {
     <figure style={{ margin: 0 }}>
       <svg
         viewBox="0 0 320 180"
-        style={{ display: "block", width: "100%", borderRadius: "var(--r-md)", background: "#33373a" }}
+        style={{ display: "block", width: "100%", borderRadius: "var(--r-md)", background: SURFACE }}
         role="img"
-        aria-label={
-          pothole.confidence === null
-            ? `Detector output for ${pothole.ref}: accepted bounding box`
-            : `Detector output for ${pothole.ref}: bounding box at confidence ${Math.round(pothole.confidence * 100)} per cent`
-        }
+        aria-label={`Detector output for ${pothole.ref}: accepted bounding box`}
       >
-        <rect width="320" height="180" fill="#33373a" />
+        <rect width="320" height="180" style={{ fill: SURFACE }} />
         {specks.map((s, i) => (
-          <circle key={i} cx={s.cx} cy={s.cy} r={s.r} fill="#ffffff" opacity={s.o} />
+          <circle key={i} cx={s.cx} cy={s.cy} r={s.r} style={{ fill: MARK }} opacity={s.o} />
         ))}
         {/* Lane edge, so the frame reads as a carriageway. */}
-        <rect x="0" y="150" width="320" height="4" fill="#ffffff" opacity="0.30" />
-        <rect x="0" y="16" width="320" height="2" fill="#ffffff" opacity="0.12" />
+        <rect x="0" y="150" width="320" height="4" style={{ fill: MARK }} opacity="0.30" />
+        <rect x="0" y="16" width="320" height="2" style={{ fill: MARK }} opacity="0.12" />
 
         {/* The accepted detection. */}
-        <rect x={x} y={y} width={w} height={h} fill="none" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="5 4" opacity="0.95" />
+        <rect x={x} y={y} width={w} height={h} strokeDasharray="5 4" opacity="0.95" style={{ fill: "none", stroke: MARK, strokeWidth: 1.5 }} />
         {[
           [x, y, 1, 1],
           [x + w, y, -1, 1],
@@ -59,30 +65,13 @@ export default function DetectionFrame({ pothole }: { pothole: Pothole }) {
           <path
             key={i}
             d={`M${cx} ${cy + sy * 9} L${cx} ${cy} L${cx + sx * 9} ${cy}`}
-            stroke="#ffffff"
-            strokeWidth="2"
-            fill="none"
+            style={{ fill: "none", stroke: MARK, strokeWidth: 2 }}
           />
         ))}
-        {pothole.confidence !== null && (
-          <>
-            <rect x={x} y={y - 17} width={54} height={16} rx="2" fill="#1d70b8" />
-            <text
-              x={x + 6}
-              y={y - 5}
-              fill="#ffffff"
-              fontSize="10"
-              fontFamily="var(--font-data)"
-              letterSpacing="0.02em"
-            >
-              {pothole.confidence.toFixed(2)}
-            </text>
-          </>
-        )}
       </svg>
       <figcaption className="secondary" style={{ marginTop: 6, fontSize: "var(--t-small)", lineHeight: 1.4 }}>
-        Detector output, {pothole.frameCount} {pothole.frameCount === 1 ? "frame" : "frames"} accepted. The captured
-        photograph loads once the detector project is connected.
+        Detector output, {pothole.detection_count} {pothole.detection_count === 1 ? "frame" : "frames"} accepted. The
+        captured photograph loads once the detector project is connected.
       </figcaption>
     </figure>
   );

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  priority, rowStyle, severitySegments, severityGrade, evidenceLine, inspectorLines,
+  priority, severitySegments, severityGrade, evidenceLine, inspectorLines,
   matchesFilter, visibleRows, stats, isSelectable, FILTER_CYCLE,
+  estimateMinutes, planCandidates, straightLineKm,
 } from "./derive";
 import type { Pothole } from "@/lib/data/types";
 
@@ -20,16 +21,6 @@ describe("priority", () => {
     expect(priority(base, now)).toBeCloseTo(1.0986, 3);
     expect(priority(p({ distinct_vehicles: 1, first_detected_at: now.toISOString() }), now)).toBeCloseTo(0.5 * Math.log(2), 6);
     expect(priority(p({ severity: 0 }), now)).toBe(0);
-  });
-});
-
-describe("rowStyle", () => {
-  it("marker by status, background by selection then link", () => {
-    expect(rowStyle(p({ status: "suspected" }), { linked: false, selected: false })).toEqual({
-      mark: "var(--color-neutral-400)", bg: "transparent", priColor: "var(--ink-72)" });
-    expect(rowStyle(base, { linked: true, selected: false })).toMatchObject({ mark: "var(--color-accent)", bg: "var(--ink-5)", priColor: "var(--color-accent-800)" });
-    expect(rowStyle(p({ status: "scheduled" }), { linked: true, selected: true })).toMatchObject({ mark: "var(--color-accent-800)", bg: "var(--color-accent-100)" });
-    expect(rowStyle(p({ status: "repaired" }), { linked: false, selected: false }).mark).toBe("var(--color-neutral-300)");
   });
 });
 
@@ -98,5 +89,51 @@ describe("filters and stats", () => {
   });
   it("filter cycle is the chip order", () => {
     expect(FILTER_CYCLE).toEqual(["all", "confirmed", "suspected", "scheduled"]);
+  });
+});
+
+describe("estimateMinutes", () => {
+  it("is the service time plus a flat travel allowance per stop", () => {
+    expect(estimateMinutes(0, 20)).toBe(0);
+    expect(estimateMinutes(1, 20)).toBe(27); // 20 + round(6.5)
+    expect(estimateMinutes(4, 20)).toBe(106); // 80 + round(26)
+    expect(estimateMinutes(3, 15)).toBe(65); // 45 + round(19.5) = 45 + 20
+  });
+});
+
+describe("planCandidates", () => {
+  const area: GeoJSON.Polygon = {
+    type: "Polygon",
+    coordinates: [[[-0.13, 51.49], [-0.12, 51.49], [-0.12, 51.50], [-0.13, 51.50], [-0.13, 51.49]]],
+  };
+  const list = [
+    p({ id: "a", status: "suspected", lng: -0.1247, lat: 51.4962 }),
+    p({ id: "b", status: "confirmed", lng: -0.1247, lat: 51.4962 }),
+    p({ id: "c", status: "confirmed", lng: -0.30, lat: 51.60 }),
+    p({ id: "d", status: "scheduled", lng: -0.1247, lat: 51.4962 }),
+    p({ id: "e", status: "repaired", lng: -0.1247, lat: 51.4962 }),
+  ];
+  it("in manual mode the candidates are whatever the operator picked", () => {
+    expect(planCandidates(list, { mode: "manual", area: null, selectedCount: 0 })).toBe(0);
+    expect(planCandidates(list, { mode: "manual", area, selectedCount: 2 })).toBe(2);
+  });
+  it("in count and time modes it is the open queue, or the open queue inside the area", () => {
+    expect(planCandidates(list, { mode: "count", area: null, selectedCount: 0 })).toBe(3);
+    expect(planCandidates(list, { mode: "time", area: null, selectedCount: 9 })).toBe(3);
+    expect(planCandidates(list, { mode: "count", area, selectedCount: 0 })).toBe(2);
+  });
+});
+
+describe("straightLineKm", () => {
+  it("sums the legs in the order the stops are listed, and is zero for fewer than two", () => {
+    expect(straightLineKm([])).toBe(0);
+    expect(straightLineKm([p({ lng: -0.1, lat: 51.5 })])).toBe(0);
+    // Three points a degree of latitude apart: two legs of ~111.2 km each.
+    const line = [p({ lat: 51, lng: 0 }), p({ lat: 52, lng: 0 }), p({ lat: 53, lng: 0 })];
+    expect(straightLineKm(line)).toBeCloseTo(222.4, 0);
+  });
+  it("depends on the order given, because that is the order a crew would drive", () => {
+    const a = p({ lat: 51, lng: 0 }), b = p({ lat: 52, lng: 0 }), c = p({ lat: 51.1, lng: 0 });
+    expect(straightLineKm([a, c, b])).toBeLessThan(straightLineKm([a, b, c]));
   });
 });
