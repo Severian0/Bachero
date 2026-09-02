@@ -1,5 +1,8 @@
 import type { LngLat } from "@/lib/solver/haversine";
 
+// Hardcodes SRID 4326 (the `e6100000` little-endian encoding of 4326) since
+// every geography column in this schema is WGS84; a different SRID here
+// falls through to "Unsupported WKB" rather than being parsed wrongly.
 const EWKB_LE_POINT_WITH_SRID = "0101000020e6100000";
 const WKB_LE_POINT_PLAIN = "0101000000";
 

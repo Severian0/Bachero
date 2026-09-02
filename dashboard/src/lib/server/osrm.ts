@@ -12,8 +12,15 @@ export interface OsrmClient {
 
 interface OsrmTableResponse {
   code: string;
-  durations?: number[][];
-  distances?: number[][];
+  durations?: (number | null)[][];
+  distances?: (number | null)[][];
+}
+
+// OSRM returns null for a cell whose pair has no route between them. Treat
+// those (and any other non-finite value) as infinite cost so the solver's
+// insertion cost never picks an unreachable leg.
+function toCostOrInfinity(value: number | null, unit: number): number {
+  return value === null || !Number.isFinite(value) ? Infinity : value / unit;
 }
 
 interface OsrmRouteResponse {
@@ -46,8 +53,8 @@ export function createOsrmClient(baseUrl: string, fetchImpl: typeof fetch = fetc
       if (body.code !== "Ok" || !body.durations || !body.distances) {
         throw new Error("Route service unavailable");
       }
-      const durationMin = body.durations.map((row) => row.map((seconds) => seconds / 60));
-      const distanceKm = body.distances.map((row) => row.map((metres) => metres / 1000));
+      const durationMin = body.durations.map((row) => row.map((seconds) => toCostOrInfinity(seconds, 60)));
+      const distanceKm = body.distances.map((row) => row.map((metres) => toCostOrInfinity(metres, 1000)));
       return { durationMin, distanceKm };
     },
 
