@@ -4,6 +4,7 @@ import type {
 } from "./types";
 import { potholeRef } from "./types";
 import { priority } from "@/lib/console/derive";
+import { pointInPolygon } from "@/lib/console/area";
 import { buildMatrix, type LngLat } from "@/lib/solver/haversine";
 import { solve } from "@/lib/solver/heuristic";
 
@@ -71,16 +72,6 @@ function uuidFrom(rng: () => number): string {
   const hex = () => Math.floor(rng() * 16).toString(16);
   const s = Array.from({ length: 32 }, hex).join("");
   return `${s.slice(0, 8)}-${s.slice(8, 12)}-4${s.slice(13, 16)}-a${s.slice(17, 20)}-${s.slice(20, 32)}`;
-}
-
-function inPolygon([x, y]: LngLat, poly: GeoJSON.Polygon): boolean {
-  const ring = poly.coordinates[0];
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i], [xj, yj] = ring[j];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
 }
 
 export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
@@ -160,7 +151,7 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
     async planRoute(req: PlanRouteRequest): Promise<PlanRouteResponse> {
       const open = [...potholes.values()].filter((p) => p.status === "suspected" || p.status === "confirmed");
       let cands = req.mode === "manual" ? open.filter((p) => req.pothole_ids?.includes(p.id)) : open;
-      if (req.mode !== "manual" && req.area) cands = cands.filter((p) => inPolygon([p.lng, p.lat], req.area!));
+      if (req.mode !== "manual" && req.area) cands = cands.filter((p) => pointInPolygon([p.lng, p.lat], req.area!));
       const serviceMin = req.service_min_per_stop ?? 20;
       const m = buildMatrix([DEPOT, ...cands.map((p): LngLat => [p.lng, p.lat])], 25);
       const sol = solve(cands.map((p) => ({ id: p.id, priority: priority(p) })), m, {

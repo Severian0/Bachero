@@ -100,7 +100,7 @@ export interface PlanRouteRequest {
   pothole_ids?: string[]; // manual
   max_stops?: number; // count
   time_budget_min?: number; // time
-  area?: { type: "Polygon"; coordinates: [number, number][][] };
+  area?: GeoJSON.Polygon;
   service_min_per_stop?: number;
 }
 

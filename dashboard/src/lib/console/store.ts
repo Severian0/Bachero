@@ -202,7 +202,7 @@ export function createConsoleStore() {
           ...(planner.mode === "manual" ? { pothole_ids: selected } : {}),
           ...(planner.mode === "count" ? { max_stops: planner.maxStops } : {}),
           ...(planner.mode === "time" ? { time_budget_min: planner.timeBudgetMin } : {}),
-          ...(planner.mode !== "manual" && planner.area ? { area: planner.area as PlanRouteRequest["area"] } : {}),
+          ...(planner.mode !== "manual" && planner.area ? { area: planner.area } : {}),
         };
         set({ planState: "planning", planError: undefined });
         try {

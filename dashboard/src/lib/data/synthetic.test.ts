@@ -59,7 +59,7 @@ describe("synthetic source", () => {
     const ds = createSyntheticSource();
     const { crews } = await ds.load();
     const tiny: GeoJSON.Polygon = { type: "Polygon", coordinates: [[[-0.1300, 51.4940], [-0.1200, 51.4940], [-0.1200, 51.4990], [-0.1300, 51.4990], [-0.1300, 51.4940]]] };
-    const res = await ds.planRoute({ crew_id: crews[0].id, plan_date: "2026-09-03", mode: "count", max_stops: 50, area: tiny as unknown as { type: "Polygon"; coordinates: [number, number][][] }, service_min_per_stop: 20 });
+    const res = await ds.planRoute({ crew_id: crews[0].id, plan_date: "2026-09-03", mode: "count", max_stops: 50, area: tiny, service_min_per_stop: 20 });
     for (const s of res.stops) {
       expect(s.lng).toBeGreaterThanOrEqual(-0.13);
       expect(s.lng).toBeLessThanOrEqual(-0.12);

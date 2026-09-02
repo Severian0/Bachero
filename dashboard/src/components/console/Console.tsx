@@ -6,6 +6,7 @@ import { createDataSource } from "@/lib/data";
 import { handleKey } from "@/lib/console/keyboard";
 import { ConsoleHeader } from "./ConsoleHeader";
 import { MapLayers } from "./map/MapLayers";
+import { useAreaDrag } from "./map/useAreaDrag";
 import { Column } from "./column/Column";
 import { useVisibleRows } from "./column/QueueList";
 
@@ -14,6 +15,7 @@ const ConsoleMap = dynamic(() => import("./map/ConsoleMap").then((m) => m.Consol
 export default function Console() {
   const unlink = useConsole((s) => s.unlink);
   const rows = useVisibleRows();
+  const { drawing, draft, handlers } = useAreaDrag();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { handleKey(e, useConsole.getState(), rows); };
@@ -53,7 +55,9 @@ export default function Console() {
     <div className="h-screen grid overflow-hidden bg-bg text-text" style={{ gridTemplateRows: "var(--console-header-h) 1fr" }}>
       <ConsoleHeader />
       <main className="grid min-h-0" style={{ gridTemplateColumns: "1fr var(--console-column-w)" }}>
-        <ConsoleMap onMapMouseLeave={unlink}><MapLayers /></ConsoleMap>
+        <ConsoleMap onMapMouseLeave={unlink} dragPan={!drawing} cursor={drawing ? "crosshair" : undefined} mouseHandlers={handlers}>
+          <MapLayers draft={draft} />
+        </ConsoleMap>
         <Column />
       </main>
     </div>

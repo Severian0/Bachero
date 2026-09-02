@@ -1,6 +1,7 @@
 "use client";
 import { createContext, useMemo, useState, type ReactNode } from "react";
 import Map from "react-map-gl/maplibre";
+import type { MapLayerMouseEvent } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { buildMapStyle } from "@/lib/map/style";
 import { readMapTokens } from "@/lib/map/tokens";
@@ -12,8 +13,9 @@ import { ScaleBar } from "./ScaleBar";
 /** Increments on every map move so overlays that project coordinates re-render. */
 export const MapTickContext = createContext(0);
 
-export function ConsoleMap({ children, dragPan = true, onMapMouseLeave }: {
-  children?: ReactNode; dragPan?: boolean; onMapMouseLeave?: () => void;
+export function ConsoleMap({ children, dragPan = true, cursor, onMapMouseLeave, mouseHandlers }: {
+  children?: ReactNode; dragPan?: boolean; cursor?: string; onMapMouseLeave?: () => void;
+  mouseHandlers?: { onMouseDown?: (e: MapLayerMouseEvent) => void; onMouseMove?: (e: MapLayerMouseEvent) => void; onMouseUp?: (e: MapLayerMouseEvent) => void };
 }) {
   const style = useMemo(() => buildMapStyle(readMapTokens()), []);
   const [tick, setTick] = useState(0);
@@ -26,11 +28,13 @@ export function ConsoleMap({ children, dragPan = true, onMapMouseLeave }: {
         mapStyle={style}
         style={{ position: "absolute", inset: 0 }}
         dragPan={dragPan}
+        cursor={cursor}
         dragRotate={false}
         pitchWithRotate={false}
         attributionControl={{ compact: true }}
         onMove={() => setTick((t) => t + 1)}
         onError={(e) => { if (/tile|source|glyph/i.test(String(e.error?.message))) setTilesFailed(true); }}
+        {...mouseHandlers}
       >
         <MapTickContext.Provider value={tick}>
           {children}
