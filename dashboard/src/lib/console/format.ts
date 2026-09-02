@@ -20,12 +20,6 @@ export function todayISO(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
-/** Age in 30-day months, 1 decimal. */
-export function monthsSince(iso: string, now: Date = new Date()): number {
-  const days = (now.getTime() - new Date(iso).getTime()) / 86_400_000;
-  return Math.round((days / 30) * 10) / 10;
-}
-
 /**
  * The dispatch field is a plain comma-separated list, because that is how an
  * operator pastes addresses out of a directory. A trailing comma or a stray

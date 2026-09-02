@@ -9,7 +9,6 @@ import { buildMatrix, type LngLat } from "@/lib/solver/haversine";
 import { solve } from "@/lib/solver/heuristic";
 
 export const DEPOT: LngLat = [-0.1246, 51.4994];
-export const DEMO_AUTHORITY = "Demo Council";
 const AUTHORITY_ID = "00000000-0000-0000-0000-000000000001";
 const TICK_MS = 1200;
 const KM_PER_TICK = 0.11;

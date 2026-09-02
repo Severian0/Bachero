@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  priority, severitySegments, severityGrade, evidenceLine, inspectorLines,
+  priority, severityGrade, evidenceLine,
   matchesFilter, visibleRows, stats, isSelectable, FILTER_CYCLE,
   estimateMinutes, planCandidates,
 } from "./derive";
@@ -24,16 +24,6 @@ describe("priority", () => {
   });
 });
 
-describe("severitySegments", () => {
-  it("fills ceil(severity×4), minimum 1", () => {
-    expect(severitySegments(0)).toEqual([true, false, false, false]);
-    expect(severitySegments(0.24)).toEqual([true, false, false, false]);
-    expect(severitySegments(0.25)).toEqual([true, false, false, false]);
-    expect(severitySegments(0.26)).toEqual([true, true, false, false]);
-    expect(severitySegments(1)).toEqual([true, true, true, true]);
-  });
-});
-
 describe("severityGrade", () => {
   it("maps the 0-1 severity onto the 1-4 grade the record and the pin quote", () => {
     expect(severityGrade(0)).toBe(1);
@@ -52,16 +42,6 @@ describe("copy", () => {
   it("evidence line states measurement then inference", () => {
     expect(evidenceLine(base)).toBe("2 vehicles · 6 passes · confirmed");
     expect(evidenceLine(p({ distinct_vehicles: 1, detection_count: 1, status: "suspected" }))).toBe("1 vehicle · 1 pass · suspected");
-  });
-  it("inspector lines", () => {
-    const l = inspectorLines(base, now);
-    expect(l.title).toBe("Millbank BCH-1111");
-    expect(l.status).toBe("Confirmed");
-    expect(l.line1).toMatch(/^2 distinct vehicles · 6 passes · last \d\d:\d\d$/);
-    expect(l.line2).toBe("Severity 0.50 · age 1 months · priority 1.1");
-  });
-  it("falls back to the coordinate when there is no street", () => {
-    expect(inspectorLines(p({ street: null }), now).title).toBe("51.4962, -0.1247 BCH-1111");
   });
 });
 

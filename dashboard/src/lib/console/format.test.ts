@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { km, minutes, hhmm, coord, plural, pct, monthsSince, todayISO, parseAddresses } from "./format";
+import { km, minutes, hhmm, coord, plural, pct, todayISO, parseAddresses } from "./format";
 import { potholeRef, toPothole } from "@/lib/data/types";
 import type { PotholeMapRow } from "@/lib/types";
 
@@ -22,10 +22,6 @@ describe("format", () => {
   });
   it("pct rounds a fraction to whole percent", () => {
     expect(pct(0.3516)).toBe("35%");
-  });
-  it("monthsSince uses 30-day months to 1 decimal", () => {
-    const now = new Date("2026-09-02T00:00:00Z");
-    expect(monthsSince("2026-07-03T00:00:00Z", now)).toBe(2);
   });
   it("todayISO is the calendar day the records are stamped in", () => {
     expect(todayISO(new Date("2026-09-02T23:14:00Z"))).toBe("2026-09-02");

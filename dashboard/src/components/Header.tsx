@@ -73,7 +73,7 @@ export default function Header({
       <div style={{ display: "flex", alignItems: "center", gap: "var(--s4)", flexShrink: 0 }}>
         <FeedState live={live} loading={loading} />
         <Rule />
-        <Stats kmToday={kmToday} reporting={reporting} />
+        <Stats kmToday={kmToday} reporting={reporting} loading={loading} />
         <Rule />
         <Clock />
         <Rule />
@@ -104,7 +104,7 @@ function FeedState({ live, loading }: { live: boolean; loading: boolean }) {
           height: 8,
           borderRadius: "50%",
           flexShrink: 0,
-          background: live ? "#5bc47f" : "#c8a63a",
+          background: live ? "var(--feed-live)" : "var(--feed-idle)",
           animation: live ? "bch-pulse 2.4s ease-in-out infinite" : undefined,
         }}
       />
@@ -113,15 +113,20 @@ function FeedState({ live, loading }: { live: boolean; loading: boolean }) {
   );
 }
 
-/** What the fleet has covered today, and how much of it is reporting now. */
-function Stats({ kmToday, reporting }: { kmToday: number; reporting: number }) {
+/**
+ * What the fleet has covered today, and how much of it is reporting now.
+ * While the data source is still loading, neither figure is true yet — the
+ * block holds its two-line height so nothing else in the rail shifts, but
+ * says nothing, so "0.0 km" never appears ahead of the real number.
+ */
+function Stats({ kmToday, reporting, loading }: { kmToday: number; reporting: number; loading: boolean }) {
   return (
     <div style={{ display: "grid", lineHeight: 1.3 }}>
       <span className="data" style={{ fontSize: "var(--t-small)", color: "var(--rail-ink-2)" }}>
-        {`${km(kmToday)} scanned today`}
+        {loading ? " " : `${km(kmToday)} scanned today`}
       </span>
       <span style={{ fontSize: 11, color: "var(--rail-ink-2)" }}>
-        {`${plural(reporting, "vehicle")} reporting`}
+        {loading ? " " : `${plural(reporting, "vehicle")} reporting`}
       </span>
     </div>
   );

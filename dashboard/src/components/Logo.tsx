@@ -23,7 +23,7 @@ export function Mark({ size = 28 }: { size?: number }) {
       <g clipPath="url(#bch-plate)">
         <rect width="24" height="24" rx="6" fill="currentColor" />
         {/* The carriageway, cut out of the plate. */}
-        <path d="M-6 18.5 L18.5 -6 L26 1.5 L1.5 26 Z" fill="var(--mark-void, #fff)" />
+        <path d="M-6 18.5 L18.5 -6 L26 1.5 L1.5 26 Z" fill="var(--mark-void, var(--surface))" />
         {/* The defect, sitting in the running lane. */}
         <circle cx="12" cy="12" r="3.4" fill="currentColor" />
       </g>

@@ -1,7 +1,7 @@
 import type { Pothole } from "@/lib/data/types";
 import type { PotholeStatus } from "@/lib/types";
 import { countInArea } from "./area";
-import { coord, hhmm, monthsSince, plural } from "./format";
+import { coord, plural } from "./format";
 
 export type Filter = "open" | "suspected" | "confirmed" | "scheduled" | "all";
 /** The four the column offers as chips. `open` is a grouping with no chip. */
@@ -31,24 +31,10 @@ export function severityGrade(severity: number): 1 | 2 | 3 | 4 {
   return Math.min(4, Math.max(1, Math.ceil(severity * 4))) as 1 | 2 | 3 | 4;
 }
 
-export function severitySegments(severity: number): boolean[] {
-  const filled = Math.max(1, Math.ceil(severity * 4));
-  return [0, 1, 2, 3].map((i) => i < filled);
-}
-
 export const displayName = (p: Pothole) => p.street ?? coord(p.lat, p.lng);
 
 export function evidenceLine(p: Pothole): string {
   return `${plural(p.distinct_vehicles, "vehicle")} · ${plural(p.detection_count, "pass", "passes")} · ${STATUS_LABEL[p.status].toLowerCase()}`;
-}
-
-export function inspectorLines(p: Pothole, now: Date = new Date()) {
-  return {
-    title: `${displayName(p)} ${p.ref}`,
-    status: STATUS_LABEL[p.status],
-    line1: `${p.distinct_vehicles} distinct vehicles · ${p.detection_count} passes · last ${hhmm(p.last_detected_at)}`,
-    line2: `Severity ${p.severity.toFixed(2)} · age ${monthsSince(p.first_detected_at, now)} months · priority ${priority(p, now).toFixed(1)}`,
-  };
 }
 
 export function matchesFilter(p: Pothole, f: Filter): boolean {

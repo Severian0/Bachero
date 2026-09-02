@@ -31,6 +31,12 @@
   --rail-ink-2: #a8bdd1;   /* 8.3:1 on rail. Secondary on chrome.            */
   --rail-rule: #24435f;
 
+  /* Feed connectivity dot on the rail. Chrome only, not part of the
+     work-status lanes below: this says "is data arriving", never
+     "proposed" or "committed".                                            */
+  --feed-live: #5bc47f;
+  --feed-idle: #c8a63a;
+
   /* -- Meaning ------------------------------------------------------------
      Two lanes, and only two. Blue is work proposed; green is work committed.
      That distinction is the whole product, so it is the only place a second
