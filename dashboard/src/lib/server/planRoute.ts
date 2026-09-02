@@ -323,21 +323,41 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
   const plan = inserted[0];
   if (!plan) throw new PlanRouteError(500, "The database request failed.");
 
-  const workOrders = rows<{ id: string; stop_order: number }>(
-    await db
-      .from("work_orders")
-      .insert(
-        ordered.map((c, i) => ({
-          pothole_id: c.id,
-          crew_id: req.crew_id,
-          route_plan_id: plan.id,
-          stop_order: i + 1,
-          status: "assigned",
-          eta: etas[i],
-        })),
-      )
-      .select("id, stop_order"),
-  );
+  // `route_plans` is unique on (crew_id, plan_date), so a plan with no stops
+  // would block every later request for that crew and date. There is no
+  // transaction across these two inserts, so compensate by hand: if the work
+  // orders fail, delete the plan row we just made. The *previous* plan is
+  // already gone at this point and is not restored — the caller must replan.
+  let workOrders: { id: string; stop_order: number }[];
+  try {
+    workOrders = rows<{ id: string; stop_order: number }>(
+      await db
+        .from("work_orders")
+        .insert(
+          ordered.map((c, i) => ({
+            pothole_id: c.id,
+            crew_id: req.crew_id,
+            route_plan_id: plan.id,
+            stop_order: i + 1,
+            status: "assigned",
+            eta: etas[i],
+          })),
+        )
+        .select("id, stop_order"),
+    );
+    if (workOrders.length !== ordered.length) {
+      throw new PlanRouteError(500, "The database request failed.");
+    }
+  } catch (error) {
+    // Best effort. If the cleanup itself fails there is nothing further to try,
+    // and the original error is the one worth reporting.
+    try {
+      await db.from("route_plans").delete().eq("id", plan.id);
+    } catch {
+      /* ignored */
+    }
+    throw error;
+  }
   const idByStop = new Map(workOrders.map((w) => [w.stop_order, w.id]));
 
   const stops: PlanRouteStop[] = ordered.map((c, i) => ({

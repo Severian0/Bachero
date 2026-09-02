@@ -255,8 +255,12 @@ function matches(row: Row, filters: Filter[]): boolean {
   return filters.every((f) => f.values.includes(row[f.col]));
 }
 
+type Result = { data: Row[] | null; error: { message: string } | null };
+/** Makes one table/op combination fail the way PostgREST does: data null, error set. */
+type FailWhen = (call: { table: string; op: WriteLog["op"] | "select" }) => boolean;
+
 /** Minimal in-memory stand-in for the supabase-js chains planRoute uses. */
-function makeDb(tables: Record<string, Row[]>) {
+function makeDb(tables: Record<string, Row[]>, failWhen: FailWhen = () => false) {
   const writes: WriteLog[] = [];
   let seq = 0;
 
@@ -266,8 +270,9 @@ function makeDb(tables: Record<string, Row[]>) {
     let payload: Row | Row[] | undefined;
     let sort: { col: string; ascending: boolean } | null = null;
 
-    function run(): { data: Row[] | null; error: null } {
+    function run(): Result {
       const rows = tables[table] ?? (tables[table] = []);
+      if (failWhen({ table, op })) return { data: null, error: { message: "boom" } };
       if (op === "select") {
         let out = rows.filter((r) => matches(r, filters));
         if (sort) {
@@ -325,7 +330,7 @@ function makeDb(tables: Record<string, Row[]>) {
         op = "delete";
         return q;
       },
-      then: <T>(resolve: (v: { data: Row[] | null; error: null }) => T) => Promise.resolve(run()).then(resolve),
+      then: <T>(resolve: (v: Result) => T) => Promise.resolve(run()).then(resolve),
     };
     return q;
   }
@@ -524,6 +529,19 @@ describe("planRoute", () => {
     await expect(planRoute({ db: broken, osrm: makeOsrm() }, COUNT_REQ)).rejects.toMatchObject({
       status: 500,
     });
+  });
+
+  it("deletes the plan it just inserted when the work orders fail to insert", async () => {
+    const tables = baseTables();
+    const { db } = makeDb(tables, (call) => call.table === "work_orders" && call.op === "insert");
+
+    await expect(planRoute({ db, osrm: makeOsrm() }, COUNT_REQ)).rejects.toMatchObject({
+      status: 500,
+      message: "The database request failed.",
+    });
+
+    // No orphaned, stopless draft is left blocking (crew_id, plan_date).
+    expect(tables.route_plans).toEqual([]);
   });
 
   it("re-plans potholes the plan being replaced is holding out of the queue", async () => {
