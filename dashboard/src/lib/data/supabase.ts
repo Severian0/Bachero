@@ -46,10 +46,15 @@ export function createSupabaseSource(client: SupabaseClient): ConsoleDataSource 
         stopOrders(),
       ]);
       if (ph.error) throw new Error(ph.error.message);
+      if (vp.error) throw new Error(vp.error.message);
+      if (cr.error) throw new Error(cr.error.message);
       const potholes = ((ph.data ?? []) as PotholeMapRow[]).map((r) => toPothole(r, so.get(r.id) ?? null));
       const vehicles: Vehicle[] = ((vp.data ?? []) as VehiclePositionRow[]).map(toVehicle);
       const crews = (cr.data ?? []) as Crew[];
-      const kmToday = ((tr.data ?? []) as { distance_m: number | null }[]).reduce((s, t) => s + (t.distance_m ?? 0), 0) / 1000;
+      // Trips are informational (the km-today tile); a failed query falls back to 0 rather
+      // than failing the whole load.
+      const kmToday = tr.error ? 0 :
+        ((tr.data ?? []) as { distance_m: number | null }[]).reduce((s, t) => s + (t.distance_m ?? 0), 0) / 1000;
       return { potholes, vehicles, crews, kmToday };
     },
 
