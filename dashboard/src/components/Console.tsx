@@ -26,6 +26,7 @@ export default function Console() {
   const potholes = useConsole((s) => s.potholes);
   const detections = useConsole((s) => s.detections);
   const crews = useConsole((s) => s.crews);
+  const vehicles = useConsole((s) => s.vehicles);
   const kmToday = useConsole((s) => s.kmToday);
   const filter = useConsole((s) => s.filter);
   const linkedId = useConsole((s) => s.linkedId);
@@ -69,6 +70,22 @@ export default function Console() {
   }, [all]);
 
   const routeIds = useMemo(() => new Set(selected), [selected]);
+
+  // The header's "reporting" count needs a clock, but not a precise one: a
+  // vehicle either has phoned in within the last minute or it hasn't, and a
+  // 5 s tick is close enough to that boundary. Reading it from state rather
+  // than calling Date.now() during render keeps the render itself pure.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(id);
+  }, []);
+  const reporting = useMemo(() => {
+    const cutoff = now - 60_000;
+    return Object.values(vehicles).filter(
+      (v) => new Date(v.position.recorded_at).getTime() >= cutoff,
+    ).length;
+  }, [vehicles, now]);
 
   const opened = useMemo(() => {
     const p = pinnedId ? potholes[pinnedId] : undefined;
@@ -141,7 +158,12 @@ export default function Console() {
 
   return (
     <div style={{ height: "100dvh", display: "grid", gridTemplateRows: "56px minmax(0,1fr)", background: "var(--canvas)", overflow: "hidden" }}>
-      <Header live={isSupabaseConfigured() && loadState === "ready"} />
+      <Header
+        live={isSupabaseConfigured() && loadState === "ready"}
+        kmToday={kmToday}
+        reporting={reporting}
+        loading={loadState === "loading"}
+      />
 
       <main style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 396px", minHeight: 0 }}>
         <PotholeMap />

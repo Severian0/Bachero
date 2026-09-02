@@ -10,7 +10,7 @@ export default async function CrewRoutePage({
   return (
     <main className="p-4">
       <h1 className="text-xl font-semibold">Route {id}</h1>
-      <p className="text-sm text-ink-55">Crew page — not implemented yet.</p>
+      <p className="text-sm" style={{ color: "var(--ink-2)" }}>Crew page — not implemented yet.</p>
     </main>
   );
 }

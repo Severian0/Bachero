@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Mark } from "./Logo";
 import { AUTHORITY, OPERATOR } from "@/lib/console/branding";
+import { km, plural } from "@/lib/console/format";
 
 /**
  * The bar across the top: what this is, whether it is live, and who is
@@ -13,7 +14,17 @@ import { AUTHORITY, OPERATOR } from "@/lib/console/branding";
  * the page. Measurements that used to float here have gone down into the
  * console, where a number is attributable to something.
  */
-export default function Header({ live }: { live: boolean }) {
+export default function Header({
+  live,
+  kmToday,
+  reporting,
+  loading,
+}: {
+  live: boolean;
+  kmToday: number;
+  reporting: number;
+  loading: boolean;
+}) {
   return (
     <header
       style={{
@@ -60,7 +71,9 @@ export default function Header({ live }: { live: boolean }) {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "var(--s4)", flexShrink: 0 }}>
-        <FeedState live={live} />
+        <FeedState live={live} loading={loading} />
+        <Rule />
+        <Stats kmToday={kmToday} reporting={reporting} />
         <Rule />
         <Clock />
         <Rule />
@@ -77,9 +90,11 @@ function Rule() {
 /**
  * Whether detections are arriving, said as a light rather than a sentence.
  * The words behind it are for a screen reader and for the operator who wants
- * to be certain, not a banner that repeats itself all day.
+ * to be certain, not a banner that repeats itself all day. While the data
+ * source is still loading, neither claim is true yet, so only the light
+ * shows: no sentence to have to walk back a moment later.
  */
-function FeedState({ live }: { live: boolean }) {
+function FeedState({ live, loading }: { live: boolean; loading: boolean }) {
   return (
     <p style={{ display: "flex", alignItems: "center", gap: "var(--s2)", margin: 0, fontSize: "var(--t-small)", color: "var(--rail-ink-2)", whiteSpace: "nowrap" }}>
       <span
@@ -93,8 +108,22 @@ function FeedState({ live }: { live: boolean }) {
           animation: live ? "bch-pulse 2.4s ease-in-out infinite" : undefined,
         }}
       />
-      {live ? "Detector feed live" : "Fixture data, feed not connected"}
+      {loading ? null : live ? "Detector feed live" : "Fixture data, feed not connected"}
     </p>
+  );
+}
+
+/** What the fleet has covered today, and how much of it is reporting now. */
+function Stats({ kmToday, reporting }: { kmToday: number; reporting: number }) {
+  return (
+    <div style={{ display: "grid", lineHeight: 1.3 }}>
+      <span className="data" style={{ fontSize: "var(--t-small)", color: "var(--rail-ink-2)" }}>
+        {`${km(kmToday)} scanned today`}
+      </span>
+      <span style={{ fontSize: 11, color: "var(--rail-ink-2)" }}>
+        {`${plural(reporting, "vehicle")} reporting`}
+      </span>
+    </div>
   );
 }
 
