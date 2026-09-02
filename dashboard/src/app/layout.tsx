@@ -1,24 +1,32 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Public_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-// Inter for headings and body (docs/design/DESIGN.md §0). Exposed as --font-inter,
-// which globals.css maps to --font-body and --font-heading.
-const inter = Inter({
-  variable: "--font-inter",
+/** A government-commissioned face, openly licensed. Carries the interface. */
+const publicSans = Public_Sans({
+  subsets: ["latin"],
+  variable: "--font-public-sans",
+  display: "swap",
+});
+
+/** Carries references, coordinates and times: read aloud and transcribed. */
+const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Bachero",
-  description: "Pothole detection network for council fleets",
+  title: "Bachero, pothole detection and repair dispatch",
+  description:
+    "Operations console for highway authorities: map detected potholes, triage the repair queue, and dispatch routes to crews.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en-GB" className={`${publicSans.variable} ${plexMono.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }
