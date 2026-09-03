@@ -11,7 +11,6 @@ import { handleKey } from "@/lib/console/keyboard";
 import {
   displayName, estimateMinutes, planCandidates, stats, visibleRows, type ChipFilter,
 } from "@/lib/console/derive";
-import { countInArea } from "@/lib/console/area";
 import { createDataSource, isSupabaseConfigured } from "@/lib/data";
 import type { ConsoleDataSource } from "@/lib/data/types";
 
@@ -35,7 +34,6 @@ export default function Console() {
   const pinnedId = useConsole((s) => s.pinnedId);
   const selected = useConsole((s) => s.selected);
   const sheetOpen = useConsole((s) => s.sheetOpen);
-  const drawing = useConsole((s) => s.drawing);
   const planner = useConsole((s) => s.planner);
   const planState = useConsole((s) => s.planState);
   const plan = useConsole((s) => s.plan);
@@ -54,7 +52,6 @@ export default function Console() {
   const dismiss = useConsole((s) => s.dismiss);
   const undoDismiss = useConsole((s) => s.undoDismiss);
   const resetPlan = useConsole((s) => s.resetPlan);
-  const setArea = useConsole((s) => s.setArea);
 
   const all = useMemo(() => Object.values(potholes), [potholes]);
   const rows = useMemo(() => visibleRows(all, filter), [all, filter]);
@@ -102,16 +99,10 @@ export default function Console() {
     [planState, plan],
   );
   const candidates = useMemo(
-    () => planCandidates(all, { mode: planner.mode, area: planner.area, selectedCount: selected.length }, plan),
-    [all, planner.mode, planner.area, selected.length, plan],
+    () => planCandidates(all, { mode: planner.mode, selectedCount: selected.length }, plan),
+    [all, planner.mode, selected.length, plan],
   );
   const crewName = crews.find((c) => c.id === planner.crewId)?.name ?? "—";
-  // How many open potholes a drawn area holds, so the column can say what the
-  // rectangle did rather than leaving the mode switch to be discovered later.
-  const areaCount = useMemo(
-    () => (planner.area ? countInArea(all, planner.area) : null),
-    [all, planner.area],
-  );
 
   const linkFromRow = useCallback((id: string | null) => (id ? link(id) : unlink()), [link, unlink]);
 
@@ -119,20 +110,19 @@ export default function Console() {
   // standing plan and the drawn area all go, because all three feed it.
   const clearRoute = useCallback(() => {
     clearSelection();
-    setArea(null);
     if (planState === "planned") resetPlan();
-  }, [clearSelection, setArea, planState, resetPlan]);
+  }, [clearSelection, planState, resetPlan]);
 
   // Keyboard is first class. The linked row and the linked pin are the same
   // idea as focus, so the arrow keys move both at once. The sheet is modal and
   // runs its own keys, and a shift-drag on the map owns Escape, so the screen
   // stands down while either is in progress.
   useEffect(() => {
-    if (sheetOpen || drawing) return;
+    if (sheetOpen) return;
     const onKey = (e: KeyboardEvent) => { handleKey(e, useConsole.getState(), rows); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows, sheetOpen, drawing]);
+  }, [rows, sheetOpen]);
 
   // A failed load has to be recoverable without a page reload, so the load
   // sequence is held here rather than inlined in the effect, and the column
@@ -212,7 +202,6 @@ export default function Console() {
               kmToday={kmToday}
               estimatedMinutes={estimateMinutes(selected.length, planner.serviceMinPerStop)}
               crewName={crewName}
-              areaCount={areaCount}
               loadState={loadState}
               loadError={loadError}
               onRetry={retry}

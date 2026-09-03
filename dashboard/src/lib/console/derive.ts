@@ -1,6 +1,5 @@
 import type { Pothole, PlanRouteResponse } from "@/lib/data/types";
 import type { PotholeStatus } from "@/lib/types";
-import { pointInPolygon } from "./area";
 import { coord, plural } from "./format";
 
 export type Filter = "suspected" | "confirmed" | "scheduled" | "all";
@@ -75,19 +74,18 @@ export function estimateMinutes(stops: number, serviceMinPerStop: number): numbe
 }
 
 /**
- * How many potholes the solver would have to work with, which is what decides
- * whether "Plan route" can be pressed. Picking stops by hand means the
- * selection; asking for a best N or a time budget means the open queue, narrowed
- * to the drawn area when there is one.
+ * How many potholes the current dials would feed the solver, which is what
+ * the sheet's Plan button gate reads. Manual mode counts the operator's
+ * selection; asking for a best N or a time budget means the open queue.
  *
  * The standing plan's own stops count too. They are `scheduled`, so the open
- * queue excludes them — but /api/plan-route replaces a crew's plan for a date
+ * queue excludes them - but /api/plan-route replaces a crew's plan for a date
  * and reads those potholes back in, so without this the button would go dead
  * the moment a route came back and replanning would be unreachable from here.
  */
 export function planCandidates(
   potholes: Pothole[],
-  { mode, area, selectedCount }: { mode: "manual" | "count" | "time"; area: GeoJSON.Polygon | null; selectedCount: number },
+  { mode, selectedCount }: { mode: "manual" | "count" | "time"; selectedCount: number },
   plan?: PlanRouteResponse | null,
 ): number {
   if (mode === "manual") return selectedCount;
@@ -95,7 +93,6 @@ export function planCandidates(
   return potholes.filter((p) => {
     const open = p.status === "suspected" || p.status === "confirmed";
     const carried = p.status === "scheduled" && onPlan.has(p.id);
-    if (!open && !carried) return false;
-    return !area || pointInPolygon([p.lng, p.lat], area);
+    return open || carried;
   }).length;
 }

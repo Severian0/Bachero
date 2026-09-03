@@ -15,7 +15,6 @@ export interface PlannerConfig {
   maxStops: number;
   timeBudgetMin: number;
   serviceMinPerStop: number;
-  area: GeoJSON.Polygon | null;
   planDate: string; // YYYY-MM-DD
 }
 
@@ -34,11 +33,6 @@ export interface ConsoleState {
   filter: Filter;
   /** The dispatch sheet, the one thing on this screen that interrupts. */
   sheetOpen: boolean;
-  /**
-   * Shift-drag on the map is drawing a plan area. The screen's own keys stand
-   * down while it is true, because Escape belongs to the drag.
-   */
-  drawing: boolean;
 
   planner: PlannerConfig;
   planState: "idle" | "planning" | "planned" | "error";
@@ -85,10 +79,8 @@ export interface ConsoleActions {
   setFilter(f: Filter): void;
   cycleFilter(): void;
   setSheetOpen(open: boolean): void;
-  setDrawing(drawing: boolean): void;
 
   setPlanner(patch: Partial<PlannerConfig>): void;
-  setArea(area: GeoJSON.Polygon | null): void;
   planRoute(): Promise<void>;
   resetPlan(): void;
   dispatch(to: string[]): Promise<void>;
@@ -136,8 +128,8 @@ export function createConsoleStore() {
       potholes: {}, vehicles: {}, crews: [], kmToday: 0, detections: {},
       loadState: "loading",
       linkedId: null, pinnedId: null, selected: [], filter: "all",
-      sheetOpen: false, drawing: false,
-      planner: { crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20, area: null, planDate: tomorrowISO() },
+      sheetOpen: false,
+      planner: { crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20, planDate: tomorrowISO() },
       planState: "idle", plan: null, planCrewId: null, dispatchState: "idle", dispatchedTo: 0,
       dispatchResult: null,
       pendingDismiss: null,
@@ -218,10 +210,8 @@ export function createConsoleStore() {
         set({ filter: FILTER_CYCLE[(i + 1) % FILTER_CYCLE.length] });
       },
       setSheetOpen(sheetOpen) { set({ sheetOpen }); },
-      setDrawing(drawing) { set({ drawing }); },
 
       setPlanner(patch) { set((s) => ({ planner: { ...s.planner, ...patch } })); },
-      setArea(area) { set((s) => ({ planner: { ...s.planner, area } })); },
       async planRoute() {
         const { planner, selected } = get();
         if (!ds || !planner.crewId) return;
@@ -233,7 +223,6 @@ export function createConsoleStore() {
           ...(planner.mode === "manual" ? { pothole_ids: selected } : {}),
           ...(planner.mode === "count" ? { max_stops: planner.maxStops } : {}),
           ...(planner.mode === "time" ? { time_budget_min: planner.timeBudgetMin } : {}),
-          ...(planner.mode !== "manual" && planner.area ? { area: planner.area } : {}),
         };
         set({ planState: "planning", planError: undefined });
         try {

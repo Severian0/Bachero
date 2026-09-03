@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMap } from "react-map-gl/maplibre";
 import { ConsoleMap, type MapStatus } from "./console/map/ConsoleMap";
 import { MapLayers } from "./console/map/MapLayers";
-import { useAreaDrag } from "./console/map/useAreaDrag";
 import { useConsole } from "@/lib/console/store";
 import { STATUS_VISUAL } from "@/lib/console/visual";
 import { DEPOT } from "@/lib/data/synthetic";
@@ -21,7 +20,6 @@ import type { PotholeStatus } from "@/lib/types";
 export default function PotholeMap() {
   const unlink = useConsole((s) => s.unlink);
   const [status, setStatus] = useState<MapStatus>("loading");
-  const { drawing, draft, handlers } = useAreaDrag();
 
   // A tile failure is not a data failure, and the operator should not assume
   // the console is down, so `failed` is sticky and `ready` never overrides it.
@@ -32,9 +30,6 @@ export default function PotholeMap() {
   return (
     <ConsoleMap
       onMapMouseLeave={unlink}
-      dragPan={!drawing}
-      cursor={drawing ? "crosshair" : undefined}
-      mouseHandlers={handlers}
       onStatus={onStatus}
       overlay={
         <>
@@ -43,7 +38,7 @@ export default function PotholeMap() {
         </>
       }
     >
-      <MapLayers draft={draft} />
+      <MapLayers />
       <PanToOpenRecord />
       <MapControls />
     </ConsoleMap>

@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Map from "react-map-gl/maplibre";
-import type { MapLayerMouseEvent, MapRef } from "react-map-gl/maplibre";
+import type { MapRef } from "react-map-gl/maplibre";
 import { setWorkerUrl } from "maplibre-gl";
 
 // MapLibre derives its worker URL from import.meta.url, which the bundler does
@@ -24,16 +24,13 @@ export const MapTickContext = createContext(0);
 export type MapStatus = "loading" | "ready" | "failed";
 
 export function ConsoleMap({
-  children, overlay, dragPan = true, cursor, onMapMouseLeave, mouseHandlers, onStatus,
+  children, overlay, onMapMouseLeave, onStatus,
 }: {
   /** Rendered inside the map, so `useMap`, `Marker` and `Source` all work. */
   children?: ReactNode;
   /** Rendered over the map but outside it: chrome that needs no map context. */
   overlay?: ReactNode;
-  dragPan?: boolean;
-  cursor?: string;
   onMapMouseLeave?: () => void;
-  mouseHandlers?: { onMouseDown?: (e: MapLayerMouseEvent) => void; onMouseMove?: (e: MapLayerMouseEvent) => void; onMouseUp?: (e: MapLayerMouseEvent) => void };
   onStatus?: (s: MapStatus) => void;
 }) {
   const style = useMemo(() => buildMapStyle(readMapTokens()), []);
@@ -61,8 +58,6 @@ export function ConsoleMap({
         initialViewState={{ longitude: DEPOT[0], latitude: DEPOT[1], zoom: 14.5 }}
         mapStyle={style}
         style={{ position: "absolute", inset: 0 }}
-        dragPan={dragPan}
-        cursor={cursor}
         dragRotate={false}
         pitchWithRotate={false}
         attributionControl={{ compact: true }}
@@ -75,7 +70,6 @@ export function ConsoleMap({
           console.error("Basemap error:", e.error?.message ?? e);
           onStatus?.("failed");
         }}
-        {...mouseHandlers}
       >
         <MapTickContext.Provider value={tick}>
           {children}

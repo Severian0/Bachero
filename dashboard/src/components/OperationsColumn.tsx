@@ -28,7 +28,6 @@ export default function OperationsColumn({
   kmToday,
   estimatedMinutes,
   crewName,
-  areaCount,
   loadState,
   loadError,
   onRetry,
@@ -52,7 +51,6 @@ export default function OperationsColumn({
   estimatedMinutes: number;
   crewName: string;
   /** Open potholes inside the drawn plan area, or `null` when none is drawn. */
-  areaCount: number | null;
   loadState: "loading" | "ready" | "error";
   loadError?: string;
   onRetry: () => void;
@@ -180,13 +178,6 @@ export default function OperationsColumn({
           <p className="secondary" style={{ margin: 0, fontSize: "var(--t-small)" }}>
             {planned ? (
               <Clear onClearRoute={onClearRoute} />
-            ) : areaCount !== null ? (
-              // Drawing an area switches the planner to Best N. Say so here, or
-              // the only evidence of the change is a rectangle on the map.
-              <>
-                Area drawn · <span className="data">{areaCount}</span> in area · Best N ·{" "}
-                <Clear onClearRoute={onClearRoute} />
-              </>
             ) : n === 0 ? (
               "Open a record to add it."
             ) : (

@@ -139,15 +139,6 @@ describe("console store", () => {
     expect(s.getState().sheetOpen).toBe(false);
   });
 
-  it("records that an area is being drawn, so the screen's keys stand down", () => {
-    const s = createConsoleStore();
-    expect(s.getState().drawing).toBe(false);
-    s.getState().setDrawing(true);
-    expect(s.getState().drawing).toBe(true);
-    s.getState().setDrawing(false);
-    expect(s.getState().drawing).toBe(false);
-  });
-
   it("planRoute builds the request from planner config and stores the result", async () => {
     const ds = fakeDs();
     const s = createConsoleStore();

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { OPERATOR } from "@/lib/console/branding";
-import { countInArea } from "@/lib/console/area";
 import { displayName, planCandidates, severityGrade } from "@/lib/console/derive";
 import { hhmm, km, minutes, parseAddresses, pct, plural } from "@/lib/console/format";
 import { useConsole, type Mode } from "@/lib/console/store";
@@ -46,7 +45,6 @@ export default function DispatchSheet() {
   const dispatchResult = useConsole((s) => s.dispatchResult);
 
   const setPlanner = useConsole((s) => s.setPlanner);
-  const setArea = useConsole((s) => s.setArea);
   const setSheetOpen = useConsole((s) => s.setSheetOpen);
   const toggleSelected = useConsole((s) => s.toggleSelected);
   const clearSelection = useConsole((s) => s.clearSelection);
@@ -91,9 +89,8 @@ export default function DispatchSheet() {
   // Two different crews, deliberately: the one being chosen, and the one the
   // standing route was solved for. Only the second may appear on a plan.
   const planCrew = crews.find((c) => c.id === planCrewId);
-  const inArea = countInArea(all, planner.area);
   const candidates = planCandidates(all, {
-    mode: planner.mode, area: planner.area, selectedCount: selected.length,
+    mode: planner.mode, selectedCount: selected.length,
   }, plan);
 
   const planned = planState === "planned" && plan ? plan : null;
@@ -344,16 +341,6 @@ export default function DispatchSheet() {
                     </Field>
                   </div>
 
-                  {planner.mode !== "manual" && (
-                    <div className="secondary" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--s3)", fontSize: "var(--t-small)" }}>
-                      <span>{planner.area ? `Area drawn · ${inArea} in area` : "No area · Shift-drag on the map to draw one"}</span>
-                      {planner.area && (
-                        <button type="button" className="btn btn-quiet btn-sm" onClick={() => setArea(null)}>
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
 
