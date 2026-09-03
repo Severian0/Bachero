@@ -46,6 +46,7 @@ export default function DispatchSheet() {
 
   const setPlanner = useConsole((s) => s.setPlanner);
   const setSheetOpen = useConsole((s) => s.setSheetOpen);
+  const setPreviewDrive = useConsole((s) => s.setPreviewDrive);
   const toggleSelected = useConsole((s) => s.toggleSelected);
   const clearSelection = useConsole((s) => s.clearSelection);
   const planRoute = useConsole((s) => s.planRoute);
@@ -353,6 +354,17 @@ export default function DispatchSheet() {
                     <span className="data secondary" style={{ fontSize: "var(--t-small)" }}>
                       {minutes(planned.total_minutes)}
                     </span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ marginLeft: "auto" }}
+                      onClick={() => {
+                        setPreviewDrive(true);
+                        setSheetOpen(false);
+                      }}
+                    >
+                      Preview drive
+                    </button>
                   </div>
                   <p className="secondary" style={{ margin: "var(--s1) 0 0", fontSize: "var(--t-small)" }}>
                     <span className="data">{pct(Math.max(0, saved))}</span> shorter than visiting by priority (

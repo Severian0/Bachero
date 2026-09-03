@@ -339,4 +339,31 @@ describe("console store", () => {
     expect(s.getState().sheetOpen).toBe(false);
   });
 
+
+  it("preview drive stops on replan, discard and dispatch", async () => {
+    const ds = fakeDs();
+    const s = createConsoleStore();
+    s.getState().setDataSource(ds);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().upsertPothole(base);
+    s.getState().toggleSelected("a");
+
+    expect(s.getState().previewDrive).toBe(false);
+    await s.getState().planRoute();
+    s.getState().setPreviewDrive(true);
+
+    // Replanning proposes a different route; the old playback must not keep driving it.
+    s.getState().toggleSelected("a");
+    await s.getState().planRoute();
+    expect(s.getState().previewDrive).toBe(false);
+
+    s.getState().setPreviewDrive(true);
+    await s.getState().dispatch(["crew@example.com"]);
+    expect(s.getState().previewDrive).toBe(false);
+
+    s.getState().setPreviewDrive(true);
+    s.getState().resetPlan();
+    expect(s.getState().previewDrive).toBe(false);
+  });
+
 });

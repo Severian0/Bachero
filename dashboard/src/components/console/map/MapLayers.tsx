@@ -4,6 +4,7 @@ import { PotholePin } from "./PotholePin";
 import { VehicleMarker } from "./VehicleMarker";
 import { TrailLayer } from "./TrailLayer";
 import { RouteLayer } from "./RouteLayer";
+import { PreviewDriveLayer } from "./PreviewDriveLayer";
 import { CrosshairGuides } from "./CrosshairGuides";
 
 export function MapLayers() {
@@ -15,6 +16,7 @@ export function MapLayers() {
       {Object.values(potholes).map((p) => <PotholePin key={p.id} p={p} />)}
       {Object.values(vehicles).map((v) => <VehicleMarker key={v.id} v={v} />)}
       <RouteLayer />
+      <PreviewDriveLayer />
       <CrosshairGuides />
     </>
   );

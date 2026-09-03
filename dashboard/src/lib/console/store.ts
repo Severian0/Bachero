@@ -38,6 +38,8 @@ export interface ConsoleState {
 
   planner: PlannerConfig;
   planState: "idle" | "planning" | "planned" | "error";
+  /** The proposed route is playing on the map (Preview drive). */
+  previewDrive: boolean;
   plan: PlanRouteResponse | null;
   /**
    * The crew the standing plan was actually computed for. Held apart from
@@ -81,6 +83,7 @@ export interface ConsoleActions {
   setFilter(f: Filter): void;
   cycleFilter(): void;
   setSheetOpen(open: boolean): void;
+  setPreviewDrive(on: boolean): void;
 
   setPlanner(patch: Partial<PlannerConfig>): void;
   planRoute(): Promise<void>;
@@ -135,6 +138,7 @@ export function createConsoleStore() {
       sheetOpen: false,
       planner: { crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20, planDate: tomorrowISO() },
       planState: "idle", plan: null, planCrewId: null, dispatchState: "idle", dispatchedTo: 0,
+      previewDrive: false,
       dispatchResult: null,
       pendingDismiss: null,
 
@@ -214,6 +218,7 @@ export function createConsoleStore() {
         set({ filter: FILTER_CYCLE[(i + 1) % FILTER_CYCLE.length] });
       },
       setSheetOpen(sheetOpen) { set({ sheetOpen }); },
+      setPreviewDrive(previewDrive) { set({ previewDrive }); },
 
       setPlanner(patch) { set((s) => ({ planner: { ...s.planner, ...patch } })); },
       async planNearest() {
@@ -242,7 +247,7 @@ export function createConsoleStore() {
           ...(planner.mode === "count" ? { max_stops: planner.maxStops } : {}),
           ...(planner.mode === "time" ? { time_budget_min: planner.timeBudgetMin } : {}),
         };
-        set({ planState: "planning", planError: undefined });
+        set({ planState: "planning", planError: undefined, previewDrive: false });
         try {
           const plan = await ds.planRoute(req);
           // An empty plan is a failure, not a route. Any previous plan has to go
@@ -266,11 +271,11 @@ export function createConsoleStore() {
           set({ planState: "error", planError: e instanceof Error && e.message ? e.message : PLAN_ERROR });
         }
       },
-      resetPlan() { set({ planState: "idle", plan: null, planCrewId: null, planError: undefined, dispatchState: "idle", dispatchError: undefined, dispatchedTo: 0, dispatchResult: null }); },
+      resetPlan() { set({ planState: "idle", plan: null, planCrewId: null, planError: undefined, dispatchState: "idle", dispatchError: undefined, dispatchedTo: 0, dispatchResult: null, previewDrive: false }); },
       async dispatch(to) {
         const plan = get().plan;
         if (!ds || !plan) return;
-        set({ dispatchState: "sending", dispatchError: undefined });
+        set({ dispatchState: "sending", dispatchError: undefined, previewDrive: false });
         try {
           const result = await ds.dispatch({ route_plan_id: plan.route_plan_id, to });
           // Publishing the plan is the state change that matters, and it
