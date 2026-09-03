@@ -4,6 +4,7 @@ import type { CrewPlan } from "@/lib/crew/plan";
 import type { WorkOrderStatus } from "@/lib/types";
 import { km, minutes } from "@/lib/console/format";
 import { StopList } from "./StopList";
+import { DriveMap } from "./DriveMap";
 
 /**
  * The driver's screen. Mobile-first: header, map (Task 3), then a bottom
@@ -31,8 +32,7 @@ export default function CrewRoute({ plan }: { plan: CrewPlan }) {
           <span className="data">{plan.plan_date}</span> · {totals}
         </p>
       </header>
-      {/* The map replaces this placeholder in Task 3. */}
-      <div style={{ background: "var(--canvas)" }} />
+      <DriveMap plan={plan} />
       <section
         style={{
           background: "var(--surface)", borderTop: "1px solid var(--rule)",
