@@ -1,0 +1,597 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRANSCRIBED, NOT AUTHORED.
+
+   Everything from `:root` to the end of `@layer components` below is a verbatim
+   copy of `dashboard/src/app/globals.css`, which is the source of truth for the
+   Bachero design system (spec: docs/design/DESIGN.md). The two apps must look
+   identical, so this file is checked against it: `npm run check:tokens` compares
+   the `:root` blocks and fails if they have drifted. Change tokens THERE, then
+   copy them here — never the other way round.
+
+   The same arrangement as `sensor/lib/theme/tokens.dart`, which transcribes the
+   same tokens into Dart for the Flutter sensor app.
+
+   Contractor-only component classes are appended at the FOOT of this file, below
+   the copied region, so the drift check stays exact.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Bachero tokens. Spec: docs/design/DESIGN.md (Industry base system + the
+   console mockup's overrides). Every colour, font, space, radius, shadow and
+   duration in the app comes from here. Never hard-code a hex in a component.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Colour — one accent (steel). No red/amber/green status palette. */
+  --color-bg: #f2f2f3;
+  --color-surface: #e9e9ea;
+  --color-text: #1d1f20;
+  --color-accent: #5980a6;
+  --color-accent-2: #728fab;
+  --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
+
+  --color-neutral-100: #f5f5f8;
+  --color-neutral-200: #e7e7ea;
+  --color-neutral-300: #d4d4d7;
+  --color-neutral-400: #b7b7ba;
+  --color-neutral-500: #98989b;
+  --color-neutral-600: #7a7a7d;
+  --color-neutral-700: #5d5d60;
+  --color-neutral-800: #424244;
+  --color-neutral-900: #2b2b2d;
+
+  --color-accent-100: #eef6ff;
+  --color-accent-200: #d6ebff;
+  --color-accent-300: #b5d9fd;
+  --color-accent-400: #94bce3;
+  --color-accent-500: #749dc4;
+  --color-accent-600: #597ea3;
+  --color-accent-700: #416180;
+  --color-accent-800: #2c455d;
+  --color-accent-900: #1d2d3d;
+
+  --color-accent-2-100: #eef6ff;
+  --color-accent-2-200: #d6ebff;
+  --color-accent-2-300: #bdd8f2;
+  --color-accent-2-400: #9ebbd8;
+  --color-accent-2-500: #7e9cb8;
+  --color-accent-2-600: #627d98;
+  --color-accent-2-700: #486077;
+  --color-accent-2-800: #314457;
+  --color-accent-2-900: #1f2d3a;
+
+  /* Ink at fixed opacities — the muted-text steps used throughout the mockup. */
+  --ink-72: color-mix(in srgb, var(--color-text) 72%, transparent);
+  --ink-58: color-mix(in srgb, var(--color-text) 58%, transparent);
+  --ink-55: color-mix(in srgb, var(--color-text) 55%, transparent);
+  --ink-45: color-mix(in srgb, var(--color-text) 45%, transparent);
+  --ink-38: color-mix(in srgb, var(--color-text) 38%, transparent);
+  --ink-12: color-mix(in srgb, var(--color-text) 12%, transparent);
+  --ink-7: color-mix(in srgb, var(--color-text) 7%, transparent);
+  --ink-5: color-mix(in srgb, var(--color-text) 5%, transparent);
+  --ink-3: color-mix(in srgb, var(--color-text) 3%, transparent);
+
+  /* Type — Inter for both roles (mockup override; DESIGN.md §0). */
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-heading: var(--font-inter), system-ui, sans-serif;
+  --font-heading-weight: 600;
+
+  /* Space — the only values allowed. 3.4px × n. */
+  --space-1: 3.4px;
+  --space-2: 6.8px;
+  --space-3: 10.2px;
+  --space-4: 13.6px;
+  --space-6: 20.4px;
+  --space-8: 27.2px;
+
+  /* Radius — mockup override (Industry base is 0). */
+  --radius-sm: 5px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* Elevation — only for things that overlap the map. */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+
+  /* Motion — DESIGN.md §7. Nothing else animates. */
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --dur-tint: 120ms; /* hover/selection tints */
+  --dur-state: 240ms; /* status change, pin resize */
+  --dur-vehicle: 1200ms; /* vehicle position interpolation */
+
+  /* Console frame — DESIGN.md §0 table. */
+  --console-header-h: 62px;
+  --console-column-w: 404px;
+  --console-footer-h: 68px;
+  --console-row-h: 58px;
+  --console-row-h-compact: 46px;
+  --console-inspector-min-h: 132px;
+}
+
+/* Tailwind namespaces aliased to the tokens above, so utilities and var() agree. */
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-text: var(--color-text);
+  --color-accent: var(--color-accent);
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-200: var(--color-accent-200);
+  --color-accent-300: var(--color-accent-300);
+  --color-accent-400: var(--color-accent-400);
+  --color-accent-500: var(--color-accent-500);
+  --color-accent-600: var(--color-accent-600);
+  --color-accent-700: var(--color-accent-700);
+  --color-accent-800: var(--color-accent-800);
+  --color-accent-900: var(--color-accent-900);
+  --color-neutral-100: var(--color-neutral-100);
+  --color-neutral-200: var(--color-neutral-200);
+  --color-neutral-300: var(--color-neutral-300);
+  --color-neutral-400: var(--color-neutral-400);
+  --color-neutral-500: var(--color-neutral-500);
+  --color-neutral-600: var(--color-neutral-600);
+  --color-neutral-700: var(--color-neutral-700);
+  --color-neutral-800: var(--color-neutral-800);
+  --color-neutral-900: var(--color-neutral-900);
+  --color-divider: var(--color-divider);
+  --color-ink-72: var(--ink-72);
+  --color-ink-58: var(--ink-58);
+  --color-ink-55: var(--ink-55);
+  --color-ink-45: var(--ink-45);
+  --color-ink-38: var(--ink-38);
+  --color-ink-12: var(--ink-12);
+  --color-ink-7: var(--ink-7);
+  --color-ink-5: var(--ink-5);
+  --color-ink-3: var(--ink-3);
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+
+  --font-body: var(--font-body);
+  --font-heading: var(--font-heading);
+
+  --spacing: 3.4px; /* p-4 = 13.6px = --space-4 */
+
+  --radius-*: initial;
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-full: 9999px;
+
+  --shadow-*: initial;
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --ease-console: var(--ease);
+}
+
+/* ─── Base ──────────────────────────────────────────────────────────────── */
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    line-height: 1.12;
+    letter-spacing: -0.015em;
+    margin: 0 0 var(--space-2);
+  }
+  h1 { font-size: 42px; }
+  h2 { font-size: 32px; }
+  h3 { font-size: 25px; }
+  h4 { font-size: 20px; }
+  h5 { font-size: 16px; }
+  h6 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+  p { margin: 0 0 var(--space-3); }
+  a { color: var(--color-accent-700); text-decoration: none; }
+  a:hover { color: var(--color-accent-900); }
+  img { display: block; max-width: 100%; }
+  :focus { outline: none; }
+  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  ::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--color-divider); border-radius: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* ─── Components (Industry classes, as used by the mockup) ───────────────── */
+
+@layer components {
+  /* Numerals that must align down a column: ids, coords, timestamps, metrics. */
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* 10–11px uppercase panel label. Every panel gets one. */
+  .panel-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-55);
+  }
+
+  .text-muted { color: var(--ink-55); }
+
+  .hr { height: 1px; border: 0; margin: var(--space-4) 0; background: var(--color-divider); }
+
+  /* Buttons. The plan/dispatch action is the one solid steel object on screen. */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    cursor: pointer; text-decoration: none;
+    font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+    font-size: 14px; line-height: 1.2; color: var(--color-text);
+    background: transparent; border: 1px solid var(--color-divider);
+    padding: var(--space-2) calc(var(--space-3) * 1.2);
+    border-radius: var(--radius-md);
+    transition: background var(--dur-tint) linear;
+  }
+  .btn svg { display: block; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
+  .btn-primary:hover:not(:disabled) { background: var(--color-accent-600); }
+  .btn-primary:active:not(:disabled) { background: var(--color-accent-700); }
+  .btn-secondary:hover:not(:disabled) { background: var(--ink-7); }
+  .btn-secondary:active:not(:disabled) { background: var(--ink-12); }
+  .btn-ghost { color: var(--color-accent); border-color: transparent; padding-inline: var(--space-1); }
+  .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+  .btn-icon { width: 36px; height: 36px; padding: 0; }
+  .btn-pill { border-radius: var(--radius-lg); }
+
+  /* Filter chip: pill, count is a filter never a statistic. */
+  .chip {
+    flex: 1; padding: 7px 0; cursor: pointer;
+    font-family: var(--font-body); font-size: 12px; font-weight: 500;
+    border-radius: var(--radius-lg); border: 1px solid var(--color-divider);
+    background: transparent; color: var(--ink-72);
+    transition: background var(--dur-tint) linear;
+  }
+  .chip[aria-pressed="true"] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
+
+  /* Tags. Status text is always spelled out. */
+  .tag {
+    display: inline-flex; align-items: center; font-size: 11px;
+    letter-spacing: 0.02em; padding: 3px 10px; border-radius: var(--radius-lg);
+  }
+  .tag-accent { background: var(--color-accent-100); color: var(--color-accent-800); }
+  .tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
+  .tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
+
+  /* Forms. */
+  .field > label { display: block; font-size: 12px; margin-bottom: 5px; color: var(--ink-72); }
+  .input {
+    width: 100%; min-height: 36px; padding: 6px 10px; font: inherit; font-size: 14px;
+    color: var(--color-text); caret-color: var(--color-accent);
+    background: var(--color-surface); border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+  }
+  .input:hover { border-color: var(--ink-45); }
+  .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
+  textarea.input { min-height: 90px; resize: vertical; }
+
+  /* Tables. */
+  .table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-58); padding: var(--space-2); border-bottom: 1px solid var(--color-divider);
+  }
+  .table td { padding: var(--space-2); border-bottom: 1px solid var(--ink-7); }
+  .table tbody tr:hover { background: var(--ink-3); }
+
+  /* Blueprint frame with registration marks. Not used by the mockup; kept
+     from the Industry base in case a panel wants it. */
+  .blueprint { position: relative; border: 1px solid var(--color-divider); border-radius: 0; }
+  .blueprint > .corner { position: absolute; width: 11px; height: 11px; color: var(--ink-55); }
+  .blueprint > .corner::before, .blueprint > .corner::after { content: ""; position: absolute; background: currentColor; }
+  .blueprint > .corner::before { left: 5px; top: 0; width: 1px; height: 100%; }
+  .blueprint > .corner::after { top: 5px; left: 0; width: 100%; height: 1px; }
+  .blueprint > .corner.tl { top: -6px; left: -6px; }
+  .blueprint > .corner.tr { top: -6px; right: -6px; }
+  .blueprint > .corner.bl { bottom: -6px; left: -6px; }
+  .blueprint > .corner.br { bottom: -6px; right: -6px; }
+}
+
+/* Live-feed indicator dot. The only looping animation in the product. */
+@keyframes bch-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.live-dot {
+  display: block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--color-accent);
+  animation: bch-breathe 2.4s ease-in-out infinite;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   CONTRACTOR-ONLY — below the copied region, so `npm run check:tokens` (which
+   compares the FIRST `:root` block of each file) stays exact.
+
+   The console is a two-column desktop frame; this app is a phone in a van and a
+   supervisor's laptop, so it needs a few parts the console does not: a tab strip,
+   a stop badge, a continuous progress rule. Every one of them is built from the
+   tokens above. No hex, no font, no radius, no shadow is invented here.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Frame values this app adds. Frame dimensions have never been on the 3.4px
+     spacing scale (the console's own are 62 / 404 / 58 / 46 / 68 / 132), so these
+     sit alongside them rather than pretending to be spacing. */
+  --tab-h: var(--console-row-h-compact); /* 46px — reuses the compact row height */
+  --stop-badge: 26px;
+  --content-max: 720px; /* a stop list is read one line at a time; do not let it sprawl */
+}
+
+@layer components {
+  /* ─── Frame ─────────────────────────────────────────────────────────────── */
+
+  /* Full-bleed, like the console's. Panels below it are separated by a single
+     hairline, never by a gap and never by a shadow. */
+  .app-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    height: var(--console-header-h);
+    padding: 0 var(--space-4);
+    background: var(--color-neutral-100);
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  .app-mark {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border: 1.5px solid var(--color-accent);
+    border-radius: var(--radius-md);
+  }
+
+  .app-title {
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .tabstrip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: var(--tab-h);
+    padding: 0 var(--space-4);
+    border-bottom: 1px solid var(--color-divider);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabstrip::-webkit-scrollbar { display: none; }
+
+  /* A tab is a chip that navigates. Same pill, same tint, same 120ms. */
+  .tab {
+    flex: none;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-72);
+    background: transparent;
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-lg);
+    transition: background var(--dur-tint) linear;
+  }
+  .tab:hover { background: var(--ink-7); }
+  .tab[aria-current="page"] {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-bg);
+  }
+  .tab[aria-current="page"]:hover { background: var(--color-accent); }
+
+  /* The one solid steel action lives here. Sticky, because on a phone the stop
+     list is longer than the screen and the action must not scroll away. */
+  .action-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    min-height: var(--console-footer-h);
+    padding: var(--space-2) var(--space-4);
+    padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
+    background: var(--color-bg);
+    border-top: 1px solid var(--color-divider);
+  }
+
+  .panel { border-top: 1px solid var(--color-divider); }
+  .panel:first-child { border-top: 0; }
+  .panel-pad { padding: var(--space-4); }
+  .hairline { height: 1px; background: var(--color-divider); }
+
+  .measure { width: 100%; max-width: var(--content-max); margin: 0 auto; }
+
+  /* ─── Metric cells ──────────────────────────────────────────────────────── */
+  /* Equal width, divided by hairlines, fixed height so a metric gaining a digit
+     never moves the panel below it. */
+  .metric-row {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+  .metric-cell {
+    padding: var(--space-4);
+    border-left: 1px solid var(--color-divider);
+    min-width: 0;
+  }
+  .metric-cell:first-child { border-left: 0; }
+  .metric-value {
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 30px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.015em;
+  }
+  .metric-label {
+    margin-top: var(--space-2);
+    font-size: 12px;
+    line-height: 1.3;
+    color: var(--ink-58);
+  }
+
+  /* ─── Stop row ──────────────────────────────────────────────────────────── */
+  /* The console's queue row, on a phone. The 3px left marker is the status mark;
+     its colour comes from --mark, set per row. Nothing moves on hover. */
+  .stop-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    min-height: var(--console-row-h);
+    padding: var(--space-2) var(--space-4);
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--ink-7);
+    box-shadow: inset 3px 0 0 var(--mark, var(--color-neutral-400));
+    cursor: pointer;
+    transition: background var(--dur-tint) linear;
+  }
+  .stop-row:hover { background: var(--ink-5); }
+  .stop-row[aria-current="true"] { background: var(--color-accent-100); }
+  .stop-row[data-done="true"] { opacity: 0.55; }
+
+  .stop-primary {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .stop-secondary {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.3;
+    color: var(--ink-58);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Stop badge ────────────────────────────────────────────────────────── */
+  /* A rounded square, like the console's pothole pin, carrying the stop number.
+     Status is fill, weight and form only — never colour alone; every badge is
+     accompanied by the status word in the row. */
+  .stop-badge {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: var(--stop-badge);
+    height: var(--stop-badge);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-heading);
+    font-weight: var(--font-heading-weight);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    transition: background var(--dur-state) var(--ease), border-color var(--dur-state) var(--ease);
+  }
+  .stop-badge[data-state="assigned"] {
+    background: transparent;
+    border: 1.5px solid var(--ink-38);
+    color: var(--ink-72);
+  }
+  .stop-badge[data-state="in_progress"] {
+    background: var(--color-accent);
+    border: 1.5px solid var(--color-accent);
+    color: var(--color-bg);
+  }
+  .stop-badge[data-state="done"] {
+    background: transparent;
+    border: 1.5px solid var(--color-neutral-300);
+    color: var(--ink-38);
+  }
+  /* Dashed: an escalated stop is open work that this crew did not close. The
+     broken outline says "not sealed" without reaching for a colour. */
+  .stop-badge[data-state="cancelled"] {
+    background: transparent;
+    border: 1.5px dashed var(--color-neutral-600);
+    color: var(--ink-55);
+  }
+  .stop-badge[data-state="open"] {
+    background: transparent;
+    border: 1.5px solid var(--color-neutral-300);
+    color: var(--ink-45);
+  }
+
+  /* ─── Progress ──────────────────────────────────────────────────────────── */
+  /* Continuous, deliberately: the segmented bar means severity and nothing else
+     (DESIGN.md §4). Always accompanied by "n of m stops done" in words. */
+  .progress-rule {
+    height: 2px;
+    width: 100%;
+    background: var(--ink-12);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .progress-rule > i {
+    display: block;
+    height: 100%;
+    background: var(--color-accent);
+    transition: width var(--dur-state) var(--ease);
+  }
+
+  /* ─── Severity ──────────────────────────────────────────────────────────── */
+  .severity-bar { display: flex; gap: 2px; align-items: center; flex: none; }
+  .severity-bar > i {
+    display: block;
+    width: 9px;
+    height: 5px;
+    border-radius: 2px;
+    background: var(--ink-12);
+  }
+  .severity-bar > i[data-filled="true"] { background: var(--mark, var(--color-accent)); }
+
+  /* ─── Pending data ──────────────────────────────────────────────────────── */
+  /* A hairline box with the panel label still legible. No skeleton shimmer. */
+  .placeholder-box {
+    display: grid;
+    place-items: center;
+    padding: var(--space-6) var(--space-4);
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: center;
+    color: var(--ink-55);
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-md);
+  }
+
+  /* ─── Evidence photo ────────────────────────────────────────────────────── */
+  .photo-frame {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    width: 100%;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-md);
+  }
+  .photo-frame img { width: 100%; height: 100%; object-fit: cover; }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+}
