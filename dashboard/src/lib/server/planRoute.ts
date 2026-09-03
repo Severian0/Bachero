@@ -1,0 +1,592 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { LineString, OsrmClient } from "./osrm";
+import { parsePointWkb } from "./wkb";
+import { renderSteps } from "./instructions";
+import { potholeRef } from "@/lib/data/types";
+import { pointInPolygon } from "@/lib/console/area";
+import { solve } from "@/lib/solver/heuristic";
+import { buildMatrix } from "@/lib/solver/haversine";
+import type { LngLat, Matrix } from "@/lib/solver/haversine";
+import { DEFAULT_TIME_ZONE, SHIFT_START_HOUR, shiftStartMs } from "@/lib/solver/schedule";
+import type {
+  PlanRouteRequest,
+  PlanRouteResponse,
+  PlanRouteStop,
+  PotholeMapRow,
+  ResolvedAnchor,
+  RouteStep,
+} from "@/lib/types";
+
+/** Error carrying the HTTP status the route handler should return. */
+export class PlanRouteError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "PlanRouteError";
+  }
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const DEFAULT_SERVICE_MIN = 20;
+/** Caps the OSRM /table call. Recorded in `objective`, never applied silently. */
+const MAX_CANDIDATES = 60;
+/** Average urban driving speed for the straight-line fallback matrix. */
+const FALLBACK_KMH = 25;
+/** Work-order statuses that still hold a pothole out of the repair queue. */
+const OPEN_WORK_ORDER_STATUSES = ["open", "assigned", "in_progress"];
+
+function isRealDate(value: string): boolean {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function isPolygon(value: unknown): value is GeoJSON.Polygon {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as { type?: unknown; coordinates?: unknown };
+  return (
+    candidate.type === "Polygon" &&
+    Array.isArray(candidate.coordinates) &&
+    Array.isArray(candidate.coordinates[0]) &&
+    candidate.coordinates[0].length >= 4
+  );
+}
+
+/**
+ * Normalises an untrusted request body into a `PlanRouteRequest`, dropping the
+ * fields that do not belong to the chosen mode, or returns one plain sentence
+ * describing the first problem found.
+ */
+export function validatePlanRequest(body: unknown): PlanRouteRequest | { error: string } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { error: "The request body must be a JSON object." };
+  }
+  const raw = body as Record<string, unknown>;
+
+  if (typeof raw.crew_id !== "string" || !UUID.test(raw.crew_id)) {
+    return { error: "crew_id must be a crew UUID." };
+  }
+  if (typeof raw.plan_date !== "string" || !DATE_ONLY.test(raw.plan_date) || !isRealDate(raw.plan_date)) {
+    return { error: "plan_date must be a calendar date in YYYY-MM-DD form." };
+  }
+  if (raw.mode !== "manual" && raw.mode !== "count" && raw.mode !== "time") {
+    return { error: "mode must be one of manual, count or time." };
+  }
+
+  let serviceMin = DEFAULT_SERVICE_MIN;
+  if (raw.service_min_per_stop !== undefined) {
+    if (typeof raw.service_min_per_stop !== "number" || !Number.isFinite(raw.service_min_per_stop) || raw.service_min_per_stop < 0) {
+      return { error: "service_min_per_stop must be a number of minutes that is zero or more." };
+    }
+    serviceMin = raw.service_min_per_stop;
+  }
+
+  if (raw.area !== undefined && !isPolygon(raw.area)) {
+    return { error: "area must be a GeoJSON Polygon with a closed outer ring." };
+  }
+
+  if (raw.start_pothole_id !== undefined) {
+    if (typeof raw.start_pothole_id !== "string" || !UUID.test(raw.start_pothole_id)) {
+      return { error: "start_pothole_id must be a pothole UUID." };
+    }
+  }
+  if (raw.end_pothole_id !== undefined) {
+    if (typeof raw.end_pothole_id !== "string" || !UUID.test(raw.end_pothole_id)) {
+      return { error: "end_pothole_id must be a pothole UUID." };
+    }
+  }
+
+  const req: PlanRouteRequest = {
+    crew_id: raw.crew_id,
+    plan_date: raw.plan_date,
+    mode: raw.mode,
+    service_min_per_stop: serviceMin,
+    ...(raw.area === undefined ? {} : { area: raw.area as GeoJSON.Polygon }),
+    ...(raw.start_pothole_id === undefined ? {} : { start_pothole_id: raw.start_pothole_id as string }),
+    // An end equal to the start is a loop at that pothole, which is exactly
+    // what an omitted end already means - normalised here so the planner has
+    // one branch fewer (spec §5).
+    ...(raw.end_pothole_id === undefined || raw.end_pothole_id === raw.start_pothole_id
+      ? {}
+      : { end_pothole_id: raw.end_pothole_id as string }),
+  };
+
+  if (raw.mode === "manual") {
+    const ids = raw.pothole_ids;
+    if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id) => typeof id === "string" && UUID.test(id))) {
+      return { error: "manual mode needs pothole_ids: a non-empty array of pothole UUIDs." };
+    }
+    req.pothole_ids = ids as string[];
+  } else if (raw.mode === "count") {
+    if (typeof raw.max_stops !== "number" || !Number.isInteger(raw.max_stops) || raw.max_stops < 1) {
+      return { error: "count mode needs max_stops: a whole number of at least 1." };
+    }
+    req.max_stops = raw.max_stops;
+  } else {
+    if (typeof raw.time_budget_min !== "number" || !Number.isFinite(raw.time_budget_min) || raw.time_budget_min < 1) {
+      return { error: "time mode needs time_budget_min: at least 1 minute." };
+    }
+    req.time_budget_min = raw.time_budget_min;
+  }
+
+  return req;
+}
+
+/**
+ * Solver candidates. Manual mode takes the named potholes in queue (priority)
+ * order; the other modes take the whole queue, optionally clipped to `area`.
+ */
+export function pickCandidates(queue: PotholeMapRow[], req: PlanRouteRequest): PotholeMapRow[] {
+  if (req.mode === "manual") {
+    const wanted = new Set(req.pothole_ids ?? []);
+    return queue.filter((row) => wanted.has(row.id));
+  }
+  const area = req.area;
+  if (!area) return [...queue];
+  return queue.filter((row) => pointInPolygon([row.lng, row.lat], area));
+}
+
+/**
+ * Shift start: 08:00 on `plan_date` in the authority's time zone.
+ *
+ * Resolved explicitly rather than from the server's local time, because the
+ * server is not in the authority's zone once this is deployed: Vercel runs UTC,
+ * which puts every ETA an hour out through British Summer Time.
+ */
+export function planStartIso(
+  planDate: string,
+  timeZone: string = process.env.AUTHORITY_TIME_ZONE ?? DEFAULT_TIME_ZONE,
+): string {
+  return new Date(shiftStartMs(planDate, SHIFT_START_HOUR, timeZone)).toISOString();
+}
+
+export interface EtaLayout {
+  /** Matrix index 0 is itself a stop (a forced start pothole). */
+  forcedStart: boolean;
+  /** Matrix index the route finishes at; 0 keeps the loop. */
+  endIndex: number;
+  /** That finishing index is itself a stop (a forced end pothole). */
+  forcedEnd: boolean;
+}
+
+/**
+ * ETA per stop: cumulative drive minutes from matrix index 0, with `serviceMin`
+ * added after each stop. `order` holds candidate indices, so the matrix index of
+ * candidate i is i + 1. A forced anchor pothole is a stop the solver never saw,
+ * so the layout adds it at the front or the back by hand.
+ */
+export function buildEtas(
+  order: number[],
+  matrix: Matrix,
+  serviceMin: number,
+  startIso: string,
+  layout?: EtaLayout,
+): string[] {
+  const startMs = new Date(startIso).getTime();
+  const etas: string[] = [];
+  let minutes = 0;
+  let from = 0;
+
+  // The crew starts the shift standing at the forced start pothole, so its eta is
+  // the shift start itself and its service time delays every later leg.
+  if (layout?.forcedStart) {
+    etas.push(new Date(startMs).toISOString());
+    minutes += serviceMin;
+  }
+
+  for (const candidate of order) {
+    const node = candidate + 1;
+    minutes += matrix.durationMin[from][node];
+    etas.push(new Date(startMs + minutes * 60_000).toISOString());
+    minutes += serviceMin;
+    from = node;
+  }
+
+  if (layout?.forcedEnd) {
+    minutes += matrix.durationMin[from][layout.endIndex];
+    etas.push(new Date(startMs + minutes * 60_000).toISOString());
+  }
+
+  return etas;
+}
+
+function toEwktLineString(line: LineString): string {
+  return `SRID=4326;LINESTRING(${line.coordinates.map(([lng, lat]) => `${lng} ${lat}`).join(", ")})`;
+}
+
+const round1 = (value: number) => Math.round(value * 10) / 10;
+
+interface QueryResult {
+  data: unknown;
+  error: { message?: string } | null;
+}
+
+/** Unwraps a PostgREST result, turning any database error into a 500. */
+function rows<T>(result: QueryResult): T[] {
+  if (result.error) throw new PlanRouteError(500, "The database request failed.");
+  return (result.data ?? []) as T[];
+}
+
+export interface PlanRouteDeps {
+  db: SupabaseClient;
+  osrm: OsrmClient;
+  now?: () => Date;
+}
+
+/** The crew's current plan for `plan_date`, if any, with the work orders on it. */
+interface ExistingPlan {
+  planIds: string[];
+  orders: { id: string; pothole_id: string }[];
+}
+
+async function loadExistingPlan(db: SupabaseClient, req: PlanRouteRequest): Promise<ExistingPlan> {
+  const plans = rows<{ id: string }>(
+    await db.from("route_plans").select("id").eq("crew_id", req.crew_id).eq("plan_date", req.plan_date),
+  );
+  if (plans.length === 0) return { planIds: [], orders: [] };
+  const planIds = plans.map((p) => p.id);
+  const orders = rows<{ id: string; pothole_id: string }>(
+    await db.from("work_orders").select("id, pothole_id").in("route_plan_id", planIds),
+  );
+  return { planIds, orders };
+}
+
+/**
+ * Solver input: the open queue, plus the potholes the plan we are about to
+ * replace is holding. Those are `scheduled`, so `repair_queue` excludes them —
+ * without this, replanning the same crew and date would find nothing to plan.
+ * Merged and re-sorted by priority so the candidate order stays queue order.
+ */
+async function loadQueue(db: SupabaseClient, existing: ExistingPlan): Promise<PotholeMapRow[]> {
+  const queue = rows<PotholeMapRow>(
+    await db.from("repair_queue").select("*").order("priority", { ascending: false }),
+  );
+  const inQueue = new Set(queue.map((row) => row.id));
+  const heldIds = [...new Set(existing.orders.map((o) => o.pothole_id))].filter((id) => !inQueue.has(id));
+  if (heldIds.length === 0) return queue;
+
+  const held = rows<PotholeMapRow>(
+    await db.from("potholes_map").select("*").in("id", heldIds).eq("status", "scheduled"),
+  );
+  return [...queue, ...held].sort((a, b) => b.priority - a.priority);
+}
+
+/**
+ * Deletes the crew's existing plan for `plan_date`, first cancelling its work
+ * orders and returning their potholes to `confirmed`. The work_orders_sync
+ * trigger only moves potholes *into* `scheduled`, so the reset is explicit; a
+ * pothole still referenced by another open work order is left alone.
+ *
+ * `keepScheduled` holds the potholes the *new* plan will carry over. Their old
+ * work orders are still deleted, but their potholes are not reset: they are
+ * scheduled before and after, so resetting them would emit a pointless
+ * `scheduled → confirmed → scheduled` pair of realtime events that a client can
+ * apply out of order. Only genuinely dropped stops flip.
+ */
+async function replaceExistingPlan(
+  db: SupabaseClient,
+  existing: ExistingPlan,
+  nowIso: string,
+  keepScheduled: ReadonlySet<string>,
+): Promise<void> {
+  const { planIds, orders: oldOrders } = existing;
+  if (planIds.length === 0) return;
+
+  if (oldOrders.length > 0) {
+    const orderIds = oldOrders.map((w) => w.id);
+    // Deleted outright rather than cancelled first. Cancelling was only ever a
+    // marker so the "still held" query below skipped them, and these rows were
+    // deleted a moment later anyway, so the extra step preserved nothing.
+    //
+    // It also keeps the replan independent of `work_orders_sync`, whose
+    // cancelled branch returns a pothole to `confirmed`. Firing that here would
+    // flip every carried-over stop out of `scheduled` and straight back again,
+    // which is precisely the pair of realtime events `keepScheduled` exists to
+    // avoid, and would make the guard below dead code.
+    rows(await db.from("work_orders").delete().in("id", orderIds));
+
+    // With them gone, anything still open is a *different* work order.
+    const potholeIds = [...new Set(oldOrders.map((w) => w.pothole_id))];
+    const stillHeld = rows<{ pothole_id: string }>(
+      await db
+        .from("work_orders")
+        .select("pothole_id")
+        .in("pothole_id", potholeIds)
+        .in("status", OPEN_WORK_ORDER_STATUSES),
+    );
+    const held = new Set(stillHeld.map((w) => w.pothole_id));
+    const freed = potholeIds.filter((id) => !held.has(id) && !keepScheduled.has(id));
+    if (freed.length > 0) {
+      rows(
+        await db
+          .from("potholes")
+          .update({ status: "confirmed", updated_at: nowIso })
+          .eq("status", "scheduled")
+          .in("id", freed),
+      );
+    }
+  }
+
+  rows(await db.from("route_plans").delete().in("id", planIds));
+}
+
+/** "BCH-1A2B - Millbank", the reference an operator can read down a phone. */
+function anchorLabel(row: PotholeMapRow): string {
+  return `${potholeRef(row.id)} - ${row.road_name ?? "Unnamed road"}`;
+}
+
+/**
+ * An anchor pothole must be one the crew could actually be sent to, so it is
+ * looked up in the merged queue rather than the filtered candidate list: manual
+ * mode may not have named it, and a replan may still be holding it.
+ */
+function anchorPothole(
+  queue: PotholeMapRow[],
+  id: string | undefined,
+  which: "start" | "end",
+): PotholeMapRow | null {
+  if (id === undefined) return null;
+  const row = queue.find((p) => p.id === id);
+  if (!row) throw new PlanRouteError(400, `That ${which} pothole is not in the repair queue.`);
+  return row;
+}
+
+/** docs/ARCHITECTURE.md §5 — plan a crew's day and persist it as a draft. */
+export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Promise<PlanRouteResponse> {
+  const { db, osrm } = deps;
+  const nowIso = (deps.now?.() ?? new Date()).toISOString();
+
+  const crews = rows<{ id: string; depot: string }>(
+    await db.from("crews").select("id, depot").eq("id", req.crew_id),
+  );
+  const crew = crews[0];
+  if (!crew) throw new PlanRouteError(404, "That crew was not found.");
+
+  let depot: LngLat;
+  try {
+    depot = parsePointWkb(crew.depot);
+  } catch {
+    throw new PlanRouteError(500, "The crew depot could not be read.");
+  }
+
+  const existing = await loadExistingPlan(db, req);
+  const queue = await loadQueue(db, existing);
+
+  const startPothole = anchorPothole(queue, req.start_pothole_id, "start");
+  const endPothole = anchorPothole(queue, req.end_pothole_id, "end");
+
+  const startPoint: LngLat = startPothole ? [startPothole.lng, startPothole.lat] : depot;
+  const startAnchor: ResolvedAnchor = startPothole
+    ? { lng: startPothole.lng, lat: startPothole.lat, label: anchorLabel(startPothole) }
+    : { lng: depot[0], lat: depot[1], label: "Depot" };
+
+  // validatePlanRequest already normalised "end equals start" to a loop, so an end
+  // pothole here is genuinely a different place.
+  const endPoint: LngLat = endPothole ? [endPothole.lng, endPothole.lat] : startPoint;
+  const endAnchor: ResolvedAnchor = endPothole
+    ? { lng: endPothole.lng, lat: endPothole.lat, label: anchorLabel(endPothole) }
+    : startAnchor;
+
+  const anchorIds = new Set(
+    [startPothole?.id, endPothole?.id].filter((id): id is string => id !== undefined),
+  );
+  const forcedCount = anchorIds.size;
+
+  let candidates = pickCandidates(queue, req).filter((c) => !anchorIds.has(c.id));
+  // Only an error when there is nothing at all to visit. Two anchor potholes and no
+  // free candidates is a legitimate plan: drive from one to the other.
+  if (candidates.length === 0 && forcedCount === 0) {
+    throw new PlanRouteError(400, "No open potholes match that request.");
+  }
+  // The queue is priority-ordered, so clipping keeps the most valuable stops.
+  const consideredAll = candidates.length <= MAX_CANDIDATES;
+  if (!consideredAll) candidates = candidates.slice(0, MAX_CANDIDATES);
+
+  const points: LngLat[] = [
+    startPoint,
+    ...candidates.map((c): LngLat => [c.lng, c.lat]),
+    ...(endPothole ? [endPoint] : []),
+  ];
+  // Candidate i keeps matrix index i + 1, so a closed route is byte-for-byte the
+  // behaviour before anchors existed.
+  const endIndex = endPothole ? candidates.length + 1 : 0;
+
+  // A dead routing service downgrades the numbers rather than killing the plan.
+  // The matrix only ranks candidate orderings; nobody reads it. `estimated` is
+  // recorded on the plan so the console can label figures it cannot stand behind.
+  let estimated = false;
+  let matrix: Matrix;
+  try {
+    matrix = await osrm.table(points);
+  } catch {
+    matrix = buildMatrix(points, FALLBACK_KMH);
+    estimated = true;
+  }
+
+  const serviceMin = req.service_min_per_stop ?? DEFAULT_SERVICE_MIN;
+  // tourMin only charges service for stops the solver chose, so the forced ones are
+  // taken off the budget before it is handed over.
+  const solverBudget =
+    req.time_budget_min === undefined
+      ? undefined
+      : req.time_budget_min - serviceMin * forcedCount;
+
+  const solution = solve(
+    candidates.map((c) => ({ id: c.id, priority: c.priority })),
+    matrix,
+    {
+      mode: req.mode,
+      maxStops: req.max_stops,
+      timeBudgetMin: solverBudget,
+      serviceMin,
+      endIndex,
+    },
+  );
+  if (solution.order.length === 0 && forcedCount === 0) {
+    throw new PlanRouteError(400, "No route could be planned for those stops.");
+  }
+
+  // An unreachable cell in the OSRM matrix is Infinity, and the solver will
+  // still seed its first candidate with one. Say so rather than letting the
+  // ETA arithmetic throw a RangeError further down.
+  if (!Number.isFinite(solution.totalMin)) {
+    throw new PlanRouteError(400, "Some of those potholes cannot be reached by road.");
+  }
+
+  const solverStops = solution.order.map((i) => candidates[i]);
+  const ordered: PotholeMapRow[] = [
+    ...(startPothole ? [startPothole] : []),
+    ...solverStops,
+    ...(endPothole ? [endPothole] : []),
+  ];
+
+  // With no solver stops the tour helpers return zero, so the one leg that still
+  // has to be driven - start anchor straight to end anchor - is added by hand.
+  const directMin = solution.order.length === 0 ? matrix.durationMin[0][endIndex] : 0;
+  const directKm = solution.order.length === 0 ? matrix.distanceKm[0][endIndex] : 0;
+
+  const routePoints: LngLat[] = [
+    startPoint,
+    ...solverStops.map((c): LngLat => [c.lng, c.lat]),
+    endPoint,
+  ];
+  let line: LineString;
+  let steps: RouteStep[];
+  try {
+    const routed = await osrm.route(routePoints);
+    line = routed.geometry;
+    steps = renderSteps(routed.steps);
+  } catch {
+    line = {
+      type: "LineString",
+      coordinates: routePoints.map(([lng, lat]): [number, number] => [lng, lat]),
+    };
+    steps = [];
+    estimated = true;
+  }
+
+  const etas = buildEtas(solution.order, matrix, serviceMin, planStartIso(req.plan_date), {
+    forcedStart: startPothole !== null,
+    endIndex,
+    forcedEnd: endPothole !== null,
+  });
+
+  await replaceExistingPlan(db, existing, nowIso, new Set(ordered.map((c) => c.id)));
+
+  const totalKm = round1(solution.totalKm + directKm);
+  const totalMinutes = Math.round(solution.totalMin + directMin + serviceMin * forcedCount);
+  const baselineKm = round1(solution.baselineKm + directKm);
+
+  const inserted = rows<{ id: string }>(
+    await db
+      .from("route_plans")
+      .insert({
+        crew_id: req.crew_id,
+        plan_date: req.plan_date,
+        status: "draft",
+        path: toEwktLineString(line),
+        total_km: totalKm,
+        total_minutes: totalMinutes,
+        baseline_km: baselineKm,
+        objective: {
+          request: req,
+          candidate_count: candidates.length,
+          estimated,
+          considered_all: consideredAll,
+          steps,
+          anchors: { start: startAnchor, end: endAnchor },
+        },
+      })
+      .select("id"),
+  );
+  const plan = inserted[0];
+  if (!plan) throw new PlanRouteError(500, "The database request failed.");
+
+  // `route_plans` is unique on (crew_id, plan_date), so a plan with no stops
+  // would block every later request for that crew and date. There is no
+  // transaction across these two inserts, so compensate by hand: if the work
+  // orders fail, delete the plan row we just made. The *previous* plan is
+  // already gone at this point and is not restored — the caller must replan.
+  let workOrders: { id: string; stop_order: number }[];
+  try {
+    workOrders = rows<{ id: string; stop_order: number }>(
+      await db
+        .from("work_orders")
+        .insert(
+          ordered.map((c, i) => ({
+            pothole_id: c.id,
+            crew_id: req.crew_id,
+            route_plan_id: plan.id,
+            stop_order: i + 1,
+            status: "assigned",
+            eta: etas[i],
+          })),
+        )
+        .select("id, stop_order"),
+    );
+    if (workOrders.length !== ordered.length) {
+      throw new PlanRouteError(500, "The database request failed.");
+    }
+  } catch (error) {
+    // Best effort. If the cleanup itself fails there is nothing further to try,
+    // and the original error is the one worth reporting.
+    try {
+      await db.from("route_plans").delete().eq("id", plan.id);
+    } catch {
+      /* ignored */
+    }
+    throw error;
+  }
+  const idByStop = new Map(workOrders.map((w) => [w.stop_order, w.id]));
+
+  const stops: PlanRouteStop[] = ordered.map((c, i) => {
+    // Guarded by the length check above; an empty string here would hand the
+    // client something that is not a work order id.
+    const workOrderId = idByStop.get(i + 1);
+    if (workOrderId === undefined) throw new PlanRouteError(500, "The database request failed.");
+    return {
+      work_order_id: workOrderId,
+      pothole_id: c.id,
+      stop_order: i + 1,
+      eta: etas[i],
+      lng: c.lng,
+      lat: c.lat,
+      severity: c.severity,
+      photo_url: c.photo_url,
+    };
+  });
+
+  return {
+    route_plan_id: plan.id,
+    stops,
+    total_km: totalKm,
+    total_minutes: totalMinutes,
+    baseline_km: baselineKm,
+    path: line,
+    steps,
+    start: startAnchor,
+    end: endAnchor,
+  };
+}

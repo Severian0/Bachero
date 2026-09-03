@@ -1,16 +1,21 @@
-// Crew page — docs/ARCHITECTURE.md §6. Login-free, mobile-first.
-// Fetches route_plans_map?id=eq.{id}&select=*,crew:crews(*),work_orders(*,pothole:potholes_map(*))
-// and PATCHes work_orders for "arrived" (in_progress) and "done".
+// The crew page is not in this app. It is the contractor portal's job screen
+// (`contractor/src/app/route/[id]/page.tsx`, port 3001 in development).
+//
+// This route stays as a redirect rather than being deleted, because `/route/{id}`
+// on the dashboard is the link in any bookmark or older dispatch email a crew
+// already has. Removing it would 404 exactly the people the loop depends on.
+//
+// New emails should link straight to the contractor portal — `crewRouteUrl` in
+// `src/lib/links.ts` is the one place that builds it.
+
+import { redirect } from "next/navigation";
+import { crewRouteUrl } from "@/lib/links";
+
 export default async function CrewRoutePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return (
-    <main className="p-4">
-      <h1 className="text-xl font-semibold">Route {id}</h1>
-      <p className="text-sm text-ink-55">Crew page — not implemented yet.</p>
-    </main>
-  );
+  redirect(crewRouteUrl(id));
 }

@@ -1,16 +1,37 @@
-import type { PlanRouteRequest } from "@/lib/types";
+import { createOsrmClient } from "@/lib/server/osrm";
+import { PlanRouteError, planRoute, validatePlanRequest } from "@/lib/server/planRoute";
+import { serverClient } from "@/lib/server/supabase";
 
-// POST /api/plan-route — docs/ARCHITECTURE.md §5.
-// 1. Candidates from `repair_queue`, filtered by pothole_ids or point-in-polygon on `area`.
-// 2. OSRM /table with the crew depot at index 0 for the duration/distance matrix.
-// 3. Greedy insertion on priority / marginal_minutes until the budget is spent, then 2-opt.
-// 4. baseline_km = same stops in descending-priority order.
-// 5. OSRM /route for the geometry.
-// 6. Insert route_plans + work_orders (status 'assigned'); the trigger marks potholes 'scheduled'.
+const DEFAULT_OSRM_BASE_URL = "https://router.project-osrm.org";
+
+// POST /api/plan-route — docs/ARCHITECTURE.md §5. All of the work is in
+// src/lib/server/planRoute.ts; this only parses, injects I/O and maps errors.
 export async function POST(request: Request) {
-  const body = (await request.json()) as PlanRouteRequest;
-  return Response.json(
-    { error: "not implemented", received: body },
-    { status: 501 },
-  );
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "The request body must be valid JSON." }, { status: 400 });
+  }
+
+  const parsed = validatePlanRequest(body);
+  if ("error" in parsed) {
+    return Response.json({ error: parsed.error }, { status: 400 });
+  }
+
+  try {
+    const plan = await planRoute(
+      {
+        db: serverClient(),
+        osrm: createOsrmClient(process.env.OSRM_BASE_URL ?? DEFAULT_OSRM_BASE_URL),
+      },
+      parsed,
+    );
+    return Response.json(plan);
+  } catch (error) {
+    if (error instanceof PlanRouteError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    return Response.json({ error: "The database request failed." }, { status: 500 });
+  }
 }

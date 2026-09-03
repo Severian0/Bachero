@@ -27,3 +27,6 @@ sensor/android/.gradle/
 .DS_Store
 .idea/
 .vscode/
+
+# superpowers scratch
+.superpowers/

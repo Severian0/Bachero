@@ -12,7 +12,7 @@ Spec: `docs/superpowers/specs/2026-09-02-console-map-design.md`. Design rules: `
 
 ## Global Constraints
 
-- All commands run from `dashboard/`. Commits use jj: `jj commit -m "<msg>"` (commits the working copy and opens a new empty change). Every commit message ends with the two trailer lines `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01T93AKP7HijHL2mbegXmMBQ`.
+- All commands run from `dashboard/`. Work is on the jj bookmark `console-map`, never `main`. Commits use jj: `jj commit -m "<msg>"` (commits the working copy and opens a new empty change), then `jj bookmark set console-map -r @-` to advance the bookmark. Do not touch the `main` bookmark. Every commit message ends with the two trailer lines `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01T93AKP7HijHL2mbegXmMBQ`.
 - Tokens only: never hard-code a hex, font, radius or shadow in a component. Use `var(--…)` or the Tailwind aliases (`bg-accent`, `text-ink-55`, `border-divider`, `rounded-lg`, `shadow-sm`, `font-heading`). Spacing is `p-1…p-8` (3.4px × n) or `var(--space-n)`; no other values. Exception: MapLibre style JSON needs literal colours, which are read from the CSS tokens at runtime (Task 9).
 - One accent, no status colours. Status is fill/weight/form; severity is size and the segmented bar; priority is the numeral.
 - Motion: 120 ms tints (`--dur-tint`), 240 ms status change (`--dur-state`), 1200 ms vehicle interpolation (`--dur-vehicle`), easing `--ease`. Nothing else animates. Hover never moves anything.
@@ -3541,8 +3541,8 @@ jj commit -m "Fit the map to live data, document the console, verify the build
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01T93AKP7HijHL2mbegXmMBQ"
-jj bookmark set main -r @-
-jj git push --bookmark main
+jj bookmark set console-map -r @-
+jj git push --bookmark console-map
 ```
 
 ---

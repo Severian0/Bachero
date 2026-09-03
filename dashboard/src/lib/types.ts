@@ -89,6 +89,21 @@ export interface RoutePlanMapRow {
   work_orders?: WorkOrder[];
 }
 
+/** One turn instruction along a planned path (spec section 5). */
+export interface RouteStep {
+  instruction: string; // "Turn left onto Millbank"
+  lng: number;
+  lat: number;
+  distance_m: number;
+}
+
+/** A route anchor after the server resolved it to a coordinate (spec section 5). */
+export interface ResolvedAnchor {
+  lng: number;
+  lat: number;
+  label: string; // "Depot", or the pothole's "ref - street"
+}
+
 // ─── /api/plan-route contract (docs/ARCHITECTURE.md §5) ────────────────────────────
 
 export type PlanMode = "manual" | "count" | "time";
@@ -100,8 +115,12 @@ export interface PlanRouteRequest {
   pothole_ids?: string[]; // manual
   max_stops?: number; // count
   time_budget_min?: number; // time
-  area?: { type: "Polygon"; coordinates: [number, number][][] };
+  area?: GeoJSON.Polygon;
   service_min_per_stop?: number;
+  /** Start the route at this queue pothole instead of the crew depot. */
+  start_pothole_id?: string;
+  /** End the route at this queue pothole instead of back at the start. */
+  end_pothole_id?: string;
 }
 
 export interface PlanRouteStop {
@@ -122,6 +141,12 @@ export interface PlanRouteResponse {
   total_minutes: number;
   baseline_km: number;
   path: { type: "LineString"; coordinates: [number, number][] };
+  /** Turn instructions along `path`; empty when the route fell back to a straight line. */
+  steps: RouteStep[];
+  /** Where the route starts, resolved server-side (spec §5). */
+  start: ResolvedAnchor;
+  /** Where it ends; equals `start` on a closed loop. */
+  end: ResolvedAnchor;
 }
 
 export interface DispatchRequest {

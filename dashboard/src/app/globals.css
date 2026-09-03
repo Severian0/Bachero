@@ -1,297 +1,232 @@
 @import "tailwindcss";
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Bachero tokens. Spec: docs/design/DESIGN.md (Industry base system + the
-   console mockup's overrides). Every colour, font, space, radius, shadow and
-   duration in the app comes from here. Never hard-code a hex in a component.
-   ───────────────────────────────────────────────────────────────────────── */
+/* ==========================================================================
+   Bachero design tokens.
+
+   Palette is derived from the GOV.UK Design System, because the reader is a
+   public official who is accountable to a committee and recognises this
+   register on sight. Every value below either comes from that palette or is
+   checked against it for contrast. Never inline a hex.
+   ========================================================================== */
 
 :root {
-  /* Colour — one accent (steel). No red/amber/green status palette. */
-  --color-bg: #f2f2f3;
-  --color-surface: #e9e9ea;
-  --color-text: #1d1f20;
-  --color-accent: #5980a6;
-  --color-accent-2: #728fab;
-  --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
+  /* -- Ink ---------------------------------------------------------------- */
+  --ink: #0b0c0c;          /* GOV.UK black. Body ink.                        */
+  --ink-2: #505a5f;        /* GOV.UK secondary. 7.0:1 on white.              */
+  --ink-3: #4a5054;        /* Tertiary, still 4.5:1 on the canvas.           */
 
-  --color-neutral-100: #f5f5f8;
-  --color-neutral-200: #e7e7ea;
-  --color-neutral-300: #d4d4d7;
-  --color-neutral-400: #b7b7ba;
-  --color-neutral-500: #98989b;
-  --color-neutral-600: #7a7a7d;
-  --color-neutral-700: #5d5d60;
-  --color-neutral-800: #424244;
-  --color-neutral-900: #2b2b2d;
+  /* -- Ground ------------------------------------------------------------- */
+  --surface: #ffffff;      /* The sheet. Where the work happens.             */
+  --canvas: #f3f2f1;       /* GOV.UK light grey. Inset and recessed areas.   */
+  --rule: #b1b4b6;         /* GOV.UK mid grey. Real borders.                 */
+  --rule-soft: #e4e2e0;    /* Hairlines inside a panel.                      */
 
-  --color-accent-100: #eef6ff;
-  --color-accent-200: #d6ebff;
-  --color-accent-300: #b5d9fd;
-  --color-accent-400: #94bce3;
-  --color-accent-500: #749dc4;
-  --color-accent-600: #597ea3;
-  --color-accent-700: #416180;
-  --color-accent-800: #2c455d;
-  --color-accent-900: #1d2d3d;
+  /* -- Command chrome ----------------------------------------------------- */
+  /* The bar and the rail carry one colour and make a single L around the
+     work, so the chrome reads as furniture rather than a strip laid on top. */
+  --rail: #0b1e33;
+  --rail-2: #16304a;       /* Raised surface on the rail.                    */
+  --rail-3: #21445f;       /* Hover on the rail.                             */
+  --rail-ink: #ffffff;     /* 15.9:1 on rail.                                */
+  --rail-ink-2: #a8bdd1;   /* 8.3:1 on rail. Secondary on chrome.            */
+  --rail-rule: #24435f;
 
-  --color-accent-2-100: #eef6ff;
-  --color-accent-2-200: #d6ebff;
-  --color-accent-2-300: #bdd8f2;
-  --color-accent-2-400: #9ebbd8;
-  --color-accent-2-500: #7e9cb8;
-  --color-accent-2-600: #627d98;
-  --color-accent-2-700: #486077;
-  --color-accent-2-800: #314457;
-  --color-accent-2-900: #1f2d3a;
+  /* Feed connectivity dot on the rail. Chrome only, not part of the
+     work-status lanes below: this says "is data arriving", never
+     "proposed" or "committed".                                            */
+  --feed-live: #5bc47f;
+  --feed-idle: #c8a63a;
 
-  /* Ink at fixed opacities — the muted-text steps used throughout the mockup. */
-  --ink-72: color-mix(in srgb, var(--color-text) 72%, transparent);
-  --ink-58: color-mix(in srgb, var(--color-text) 58%, transparent);
-  --ink-55: color-mix(in srgb, var(--color-text) 55%, transparent);
-  --ink-45: color-mix(in srgb, var(--color-text) 45%, transparent);
-  --ink-38: color-mix(in srgb, var(--color-text) 38%, transparent);
-  --ink-12: color-mix(in srgb, var(--color-text) 12%, transparent);
-  --ink-7: color-mix(in srgb, var(--color-text) 7%, transparent);
-  --ink-5: color-mix(in srgb, var(--color-text) 5%, transparent);
-  --ink-3: color-mix(in srgb, var(--color-text) 3%, transparent);
+  /* -- Meaning ------------------------------------------------------------
+     Two lanes, and only two. Blue is work proposed; green is work committed.
+     That distinction is the whole product, so it is the only place a second
+     hue is spent. Severity never uses either: it has size and a bar of its
+     own, so magnitude can never be mistaken for state.                      */
+  --action: #1d70b8;       /* GOV.UK blue. 4.6:1 on white. The one button.   */
+  --action-hover: #155a92;
+  --action-ink: #ffffff;   /* 4.6:1 on action.                               */
+  --action-soft: #e7f0f7;
+  --action-edge: #9dc2de;
 
-  /* Type — Inter for both roles (mockup override; DESIGN.md §0). */
-  --font-body: var(--font-inter), system-ui, sans-serif;
-  --font-heading: var(--font-inter), system-ui, sans-serif;
-  --font-heading-weight: 600;
+  --committed: #00703c;    /* GOV.UK green. Scheduled and dispatched.        */
+  --committed-soft: #e0efe7;
+  --committed-edge: #94c4ac;
 
-  /* Space — the only values allowed. 3.4px × n. */
-  --space-1: 3.4px;
-  --space-2: 6.8px;
-  --space-3: 10.2px;
-  --space-4: 13.6px;
-  --space-6: 20.4px;
-  --space-8: 27.2px;
+  --severe: #942514;       /* Grade 4 only. Rare by construction.            */
+  --closed: #6f777b;       /* Repaired. Drains out of the working palette.   */
 
-  /* Radius — mockup override (Industry base is 0). */
-  --radius-sm: 5px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  /* GOV.UK focus. Yellow block with a black underline: the single most
+     recognisable civic interaction detail there is, and it costs nothing. */
+  --focus: #ffdd00;
+  --focus-ink: #0b0c0c;
 
-  /* Elevation — only for things that overlap the map. */
-  --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
-  --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
-  --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+  /* -- Type ---------------------------------------------------------------
+     Public Sans is a government-commissioned face, open licensed, and the
+     nearest honest equivalent to GDS Transport. Plex Mono carries the
+     identifiers, coordinates and clock times, because those are read aloud
+     down a phone and transcribed into a work order.                        */
+  --font-ui: var(--font-public-sans), system-ui, sans-serif;
+  --font-data: var(--font-plex-mono), ui-monospace, monospace;
 
-  /* Motion — DESIGN.md §7. Nothing else animates. */
-  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
-  --dur-tint: 120ms; /* hover/selection tints */
-  --dur-state: 240ms; /* status change, pin resize */
-  --dur-vehicle: 1200ms; /* vehicle position interpolation */
+  /* Six steps, no more. Anything between these is an accident. */
+  --t-micro: 11px;         /* Uppercase labels, legend, axis marks.          */
+  --t-small: 13px;         /* Secondary lines, evidence, captions.           */
+  --t-body: 15px;          /* Row primary, body copy.                        */
+  --t-lead: 17px;          /* Wordmark, panel titles.                        */
+  --t-title: 21px;         /* Detail record heading.                         */
+  --t-metric: 30px;        /* Counts.                                        */
 
-  /* Console frame — DESIGN.md §0 table. */
-  --console-header-h: 62px;
-  --console-column-w: 404px;
-  --console-footer-h: 68px;
-  --console-row-h: 58px;
-  --console-row-h-compact: 46px;
-  --console-inspector-min-h: 132px;
+  /* -- Space -------------------------------------------------------------- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  --r-sm: 3px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-full: 999px;
+
+  --shadow-1: 0 1px 2px rgb(11 12 12 / 0.10), 0 1px 1px rgb(11 12 12 / 0.06);
+  --shadow-2: 0 4px 12px rgb(11 12 12 / 0.12), 0 1px 3px rgb(11 12 12 / 0.08);
+  --shadow-3: 0 16px 40px rgb(11 12 12 / 0.18), 0 2px 8px rgb(11 12 12 / 0.10);
+
+  --ease: cubic-bezier(.2, .6, .2, 1);
 }
 
-/* Tailwind namespaces aliased to the tokens above, so utilities and var() agree. */
-@theme inline {
-  --color-*: initial;
-  --color-bg: var(--color-bg);
-  --color-surface: var(--color-surface);
-  --color-text: var(--color-text);
-  --color-accent: var(--color-accent);
-  --color-accent-100: var(--color-accent-100);
-  --color-accent-200: var(--color-accent-200);
-  --color-accent-300: var(--color-accent-300);
-  --color-accent-400: var(--color-accent-400);
-  --color-accent-500: var(--color-accent-500);
-  --color-accent-600: var(--color-accent-600);
-  --color-accent-700: var(--color-accent-700);
-  --color-accent-800: var(--color-accent-800);
-  --color-accent-900: var(--color-accent-900);
-  --color-neutral-100: var(--color-neutral-100);
-  --color-neutral-200: var(--color-neutral-200);
-  --color-neutral-300: var(--color-neutral-300);
-  --color-neutral-400: var(--color-neutral-400);
-  --color-neutral-500: var(--color-neutral-500);
-  --color-neutral-600: var(--color-neutral-600);
-  --color-neutral-700: var(--color-neutral-700);
-  --color-neutral-800: var(--color-neutral-800);
-  --color-neutral-900: var(--color-neutral-900);
-  --color-divider: var(--color-divider);
-  --color-ink-72: var(--ink-72);
-  --color-ink-58: var(--ink-58);
-  --color-ink-55: var(--ink-55);
-  --color-ink-45: var(--ink-45);
-  --color-ink-38: var(--ink-38);
-  --color-ink-12: var(--ink-12);
-  --color-ink-7: var(--ink-7);
-  --color-ink-5: var(--ink-5);
-  --color-ink-3: var(--ink-3);
-  --color-white: #ffffff;
-  --color-transparent: transparent;
+*, *::before, *::after { box-sizing: border-box; }
 
-  --font-body: var(--font-body);
-  --font-heading: var(--font-heading);
-
-  --spacing: 3.4px; /* p-4 = 13.6px = --space-4 */
-
-  --radius-*: initial;
-  --radius-sm: var(--radius-sm);
-  --radius-md: var(--radius-md);
-  --radius-lg: var(--radius-lg);
-  --radius-full: 9999px;
-
-  --shadow-*: initial;
-  --shadow-sm: var(--shadow-sm);
-  --shadow-md: var(--shadow-md);
-  --shadow-lg: var(--shadow-lg);
-
-  --ease-console: var(--ease);
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--t-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ─── Base ──────────────────────────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; line-height: 1.25; }
+button { font: inherit; color: inherit; }
 
-@layer base {
-  html,
-  body {
-    height: 100%;
-    margin: 0;
-    background: var(--color-bg);
-    color: var(--color-text);
-    font-family: var(--font-body);
-    font-size: 15px;
-    line-height: 1.55;
-    letter-spacing: -0.005em;
-    -webkit-font-smoothing: antialiased;
-  }
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-heading);
-    font-weight: var(--font-heading-weight);
-    line-height: 1.12;
-    letter-spacing: -0.015em;
-    margin: 0 0 var(--space-2);
-  }
-  h1 { font-size: 42px; }
-  h2 { font-size: 32px; }
-  h3 { font-size: 25px; }
-  h4 { font-size: 20px; }
-  h5 { font-size: 16px; }
-  h6 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
-  p { margin: 0 0 var(--space-3); }
-  a { color: var(--color-accent-700); text-decoration: none; }
-  a:hover { color: var(--color-accent-900); }
-  img { display: block; max-width: 100%; }
-  :focus { outline: none; }
-  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  ::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
-  ::-webkit-scrollbar { width: 10px; }
-  ::-webkit-scrollbar-thumb { background: var(--color-divider); border-radius: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
+/* -- Browser surfaces -------------------------------------------------------
+   The parts we did not draw still carry the design. */
+::selection { background: var(--focus); color: var(--focus-ink); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--rule); border-radius: var(--r-full); border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-2); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+:focus { outline: none; }
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 0;
+  box-shadow: 0 4px 0 0 var(--focus-ink);
+  border-radius: 0;
 }
 
-/* ─── Components (Industry classes, as used by the mockup) ───────────────── */
+@keyframes bch-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+@keyframes bch-rise { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
 
-@layer components {
-  /* Numerals that must align down a column: ids, coords, timestamps, metrics. */
-  .tabular { font-variant-numeric: tabular-nums; }
-
-  /* 10–11px uppercase panel label. Every panel gets one. */
-  .panel-label {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ink-55);
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
   }
-
-  .text-muted { color: var(--ink-55); }
-
-  .hr { height: 1px; border: 0; margin: var(--space-4) 0; background: var(--color-divider); }
-
-  /* Buttons. The plan/dispatch action is the one solid steel object on screen. */
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    cursor: pointer; text-decoration: none;
-    font-family: var(--font-heading); font-weight: var(--font-heading-weight);
-    font-size: 14px; line-height: 1.2; color: var(--color-text);
-    background: transparent; border: 1px solid var(--color-divider);
-    padding: var(--space-2) calc(var(--space-3) * 1.2);
-    border-radius: var(--radius-md);
-    transition: background var(--dur-tint) linear;
-  }
-  .btn svg { display: block; }
-  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-  .btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
-  .btn-primary:hover:not(:disabled) { background: var(--color-accent-600); }
-  .btn-primary:active:not(:disabled) { background: var(--color-accent-700); }
-  .btn-secondary:hover:not(:disabled) { background: var(--ink-7); }
-  .btn-secondary:active:not(:disabled) { background: var(--ink-12); }
-  .btn-ghost { color: var(--color-accent); border-color: transparent; padding-inline: var(--space-1); }
-  .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
-  .btn-icon { width: 36px; height: 36px; padding: 0; }
-  .btn-pill { border-radius: var(--radius-lg); }
-
-  /* Filter chip: pill, count is a filter never a statistic. */
-  .chip {
-    flex: 1; padding: 7px 0; cursor: pointer;
-    font-family: var(--font-body); font-size: 12px; font-weight: 500;
-    border-radius: var(--radius-lg); border: 1px solid var(--color-divider);
-    background: transparent; color: var(--ink-72);
-    transition: background var(--dur-tint) linear;
-  }
-  .chip[aria-pressed="true"] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
-
-  /* Tags. Status text is always spelled out. */
-  .tag {
-    display: inline-flex; align-items: center; font-size: 11px;
-    letter-spacing: 0.02em; padding: 3px 10px; border-radius: var(--radius-lg);
-  }
-  .tag-accent { background: var(--color-accent-100); color: var(--color-accent-800); }
-  .tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
-  .tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
-
-  /* Forms. */
-  .field > label { display: block; font-size: 12px; margin-bottom: 5px; color: var(--ink-72); }
-  .input {
-    width: 100%; min-height: 36px; padding: 6px 10px; font: inherit; font-size: 14px;
-    color: var(--color-text); caret-color: var(--color-accent);
-    background: var(--color-surface); border: 1px solid var(--color-divider); border-radius: var(--radius-md);
-  }
-  .input:hover { border-color: var(--ink-45); }
-  .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
-  textarea.input { min-height: 90px; resize: vertical; }
-
-  /* Tables. */
-  .table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  .table th {
-    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--ink-58); padding: var(--space-2); border-bottom: 1px solid var(--color-divider);
-  }
-  .table td { padding: var(--space-2); border-bottom: 1px solid var(--ink-7); }
-  .table tbody tr:hover { background: var(--ink-3); }
-
-  /* Blueprint frame with registration marks. Not used by the mockup; kept
-     from the Industry base in case a panel wants it. */
-  .blueprint { position: relative; border: 1px solid var(--color-divider); border-radius: 0; }
-  .blueprint > .corner { position: absolute; width: 11px; height: 11px; color: var(--ink-55); }
-  .blueprint > .corner::before, .blueprint > .corner::after { content: ""; position: absolute; background: currentColor; }
-  .blueprint > .corner::before { left: 5px; top: 0; width: 1px; height: 100%; }
-  .blueprint > .corner::after { top: 5px; left: 0; width: 100%; height: 1px; }
-  .blueprint > .corner.tl { top: -6px; left: -6px; }
-  .blueprint > .corner.tr { top: -6px; right: -6px; }
-  .blueprint > .corner.bl { bottom: -6px; left: -6px; }
-  .blueprint > .corner.br { bottom: -6px; right: -6px; }
 }
 
-/* Live-feed indicator dot. The only looping animation in the product. */
-@keyframes bch-breathe {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+/* -- Type utilities --------------------------------------------------------- */
+.data {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
-.live-dot {
-  display: block; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--color-accent);
-  animation: bch-breathe 2.4s ease-in-out infinite;
+.micro {
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  line-height: 1.4;
 }
+.secondary { color: var(--ink-2); }
+
+/* -- Buttons ---------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  height: 38px;
+  padding: 0 var(--s4);
+  font-size: var(--t-small);
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms linear, border-color 120ms linear, color 120ms linear;
+}
+.btn:disabled { cursor: not-allowed; }
+
+.btn-primary { background: var(--action); color: var(--action-ink); }
+.btn-primary:not(:disabled):hover { background: var(--action-hover); }
+.btn-primary:disabled { background: var(--canvas); color: var(--ink-2); border-color: var(--rule); }
+
+.btn-commit { background: var(--committed); color: #fff; }
+.btn-commit:not(:disabled):hover { background: #005a30; }
+
+.btn-secondary { border-color: var(--rule); color: var(--ink); background: var(--surface); }
+.btn-secondary:not(:disabled):hover { background: var(--canvas); border-color: var(--ink-2); }
+
+.btn-quiet { color: var(--ink-2); }
+.btn-quiet:not(:disabled):hover { background: var(--canvas); color: var(--ink); }
+
+.btn-sm { height: 30px; padding: 0 var(--s3); font-size: var(--t-micro); letter-spacing: 0.04em; }
+
+/* -- Status tag -------------------------------------------------------------
+   Status is always spelled out. Colour never carries a meaning alone. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 var(--s2);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: var(--r-sm);
+  border: 1px solid;
+  white-space: nowrap;
+}
+.tag-suspected { color: var(--ink-2); border-color: var(--rule); background: var(--surface); }
+.tag-confirmed { color: var(--action); border-color: var(--action-edge); background: var(--action-soft); }
+.tag-scheduled { color: var(--committed); border-color: var(--committed-edge); background: var(--committed-soft); }
+.tag-repaired  { color: var(--closed); border-color: var(--rule); background: var(--canvas); }
+
+/* -- Map surfaces -----------------------------------------------------------
+   The basemap is desaturated at the tile level so the data always outranks
+   the map. These rules only tidy up what the vendor injects. */
+.maplibregl-ctrl-attrib { font-size: 10px !important; }
+.maplibregl-ctrl-bottom-right { margin-bottom: 2px; }
+
+/* MapLibre controls restyled to the tokens (from console-map). */
+.maplibregl-ctrl-scale {
+  margin: 0 var(--s4) var(--s4) 0;
+  padding: 2px var(--s2) var(--s1);
+  border: 0; border-bottom: 2px solid var(--ink-2);
+  background: var(--surface); box-shadow: var(--shadow-1); border-radius: var(--r-md);
+  font: 11px/1.4 var(--font-ui); color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+.maplibregl-ctrl-attrib { font: 10px/1.4 var(--font-ui); background: color-mix(in srgb, var(--surface) 85%, transparent); }
+.maplibregl-ctrl-attrib a { color: var(--ink-2); }
+.maplibregl-map { font-family: var(--font-ui); }
+.maplibregl-marker { will-change: transform; z-index: 20; }
