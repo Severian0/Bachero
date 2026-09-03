@@ -50,7 +50,7 @@ export interface CrewDataSource {
   /**
    * Cannot repair: `cancelled` + a required note. The pothole returns to the
    * council's queue — but only once the `cancelled` branch in
-   * `contractor/migrations/20260903000000_cancel_returns_pothole.sql` has been
+   * `supabase/migrations/20260903000000_cancel_returns_pothole.sql` has been
    * applied. Without it the pothole is stranded; see that file's header.
    */
   escalate(workOrderId: string, notes: string): Promise<void>;

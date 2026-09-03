@@ -11,11 +11,10 @@ Data contracts: `../docs/ARCHITECTURE.md`. Design rules: `../docs/design/DESIGN.
 Next.js 16, App Router, `src/`, Tailwind 4, TypeScript, Vitest. Separate from
 `dashboard/` — its own app, its own deploy, port 3001 in development.
 
-**Everything this app needs is inside this folder**, including its migration and
-its spec, so the branch touches no file anyone else is editing and cannot produce
-a merge conflict. Two consequences, both deliberate, both below: the migration is
-not where `supabase db push` looks, and the dispatch link needs a one-line change
-in `dashboard/` that is not made here.
+The app itself is entirely inside this folder. Two things it needs sit outside it,
+because that is the only place they work: the schema change in
+`../supabase/migrations/20260903000000_cancel_returns_pothole.sql`, and the crew
+link in `../dashboard/src/lib/links.ts`. Both are described below.
 
 ---
 
@@ -80,13 +79,10 @@ no `cancelled` branch, so escalating a stop would strand its pothole: no longer
 blocked in `repair_queue`, but still `scheduled`, which that view excludes. It
 would vanish from the solver and stay scheduled on the map forever.
 
-`migrations/20260903000000_cancel_returns_pothole.sql` adds the missing branch.
-It sits in this folder rather than `supabase/migrations/` to keep the branch
-conflict-free, and **the Supabase CLI does not look here**, so copy it across
-before pushing:
+`../supabase/migrations/20260903000000_cancel_returns_pothole.sql` adds the
+missing branch, and `supabase db push` picks it up like any other migration:
 
 ```sh
-cp migrations/20260903000000_cancel_returns_pothole.sql ../supabase/migrations/
 cd .. && supabase db push
 ```
 
@@ -111,7 +107,6 @@ That is the trigger firing, and it is beat 7 of the demo script.
 
 ```
 docs/DESIGN.md             the spec for this app
-migrations/                the one schema change it needs (see above)
 scripts/                   token-drift check, demo seed SQL
 src/
   app/                       one file per screen; each awaits `params` (Next 16)
@@ -169,41 +164,26 @@ Severity keeps the console's 4-segment bar. Route progress is a *continuous* rul
 — segmented bars mean severity and nothing else — and always carries the same
 fact in words beside it.
 
-## Where it fits — one change needed in `dashboard/`
+## Where it fits — the crew link
 
-The crew screens used to be planned for `dashboard/src/app/route/[id]/page.tsx`,
-which is still the "not implemented yet" stub. They live here instead, so the
-dispatch email's `/route/{id}` link has to point at this app.
+The crew screens were once planned for `dashboard/src/app/route/[id]/page.tsx`.
+They live here instead, so a dispatch email has to link to this app, not to the
+dashboard. Three small pieces in `dashboard/` do that:
 
-Nothing in `dashboard/` is changed on this branch — that is the point — so
-whoever owns `POST /api/dispatch` needs to build the crew link from a new
-variable rather than `NEXT_PUBLIC_APP_URL`:
+| File | What it does |
+|---|---|
+| `src/lib/links.ts` | `crewRouteUrl(routePlanId)` — the one place the crew link is built, from `NEXT_PUBLIC_CONTRACTOR_URL` (default `http://localhost:3001`). |
+| `src/app/route/[id]/page.tsx` | Redirects to it, so older bookmarks and emails still reach a crew screen. |
+| `src/app/api/dispatch/route.ts` | Still a 501 stub, but it already returns `crew_url` from `crewRouteUrl`, so whoever writes the email cannot build the wrong link. |
+
+Set the variable in `dashboard/.env.local` (and `.env.example`):
 
 ```sh
-# dashboard/.env.local and .env.example
 NEXT_PUBLIC_CONTRACTOR_URL=http://localhost:3001
 ```
 
-If you also want old links and bookmarks to keep working, replace the body of
-`dashboard/src/app/route/[id]/page.tsx` with a redirect:
-
-```tsx
-import { redirect } from "next/navigation";
-
-export default async function CrewRoutePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  redirect(
-    `${process.env.NEXT_PUBLIC_CONTRACTOR_URL ?? "http://localhost:3001"}/route/${id}`,
-  );
-}
-```
-
-That is a two-minute change in the dashboard owner's own file, deliberately left
-for them to make.
+Unset, it falls back to `http://localhost:3001`, which is right for development
+and wrong in production — so set it before deploying.
 
 ## Not built
 

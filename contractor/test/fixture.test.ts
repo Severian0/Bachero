@@ -85,7 +85,7 @@ describe("actions", () => {
 
   it("returns an escalated stop's pothole to the council's queue", async () => {
     // Mirrors the cancelled branch in
-    // contractor/migrations/20260903000000_cancel_returns_pothole.sql.
+    // supabase/migrations/20260903000000_cancel_returns_pothole.sql.
     const source = createFixtureSource();
     const [summary] = await source.today();
     const target = (await source.route(summary.id))!.stops.find(

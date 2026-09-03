@@ -99,11 +99,9 @@ today, one tomorrow), 26 stops on Westminster streets anchored near Crew A's see
 
 **Escalation orphans a pothole.** `sync_pothole_status` handles `done` and `assigned`/`in_progress`
 but not `cancelled`, so a cancelled work order leaves the pothole `scheduled` — which `repair_queue`
-excludes, so it never returns to the solver. Fixed by
-`contractor/migrations/20260903000000_cancel_returns_pothole.sql`, which adds a `cancelled` branch
-setting the pothole back to `confirmed`. It lives in this app's folder to keep the branch free of
-merge conflicts, so it is **not** picked up by `supabase db push` until someone copies it into
-`supabase/migrations/`. Shared infrastructure: flag it before applying.
+excludes, so it never returns to the solver. Fixed in a new migration,
+`supabase/migrations/20260903000000_cancel_returns_pothole.sql`, which adds a `cancelled` branch
+setting the pothole back to `confirmed`. Shared infrastructure: flag it before applying.
 
 **After-photo re-takes 409.** The storage policy grants `insert` on the `detections` bucket but not
 `update`, so re-uploading `after_{work_order_id}.jpg` fails and `upsert` cannot help. Use the spec

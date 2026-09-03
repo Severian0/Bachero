@@ -1,23 +1,12 @@
 -- =============================================================================
 -- Bachero — a cancelled work order returns its pothole to the queue
 --
--- Path:  contractor/migrations/20260903000000_cancel_returns_pothole.sql
+-- Path:  supabase/migrations/20260903000000_cancel_returns_pothole.sql
+-- Apply: `supabase db push`, or paste this file into the SQL editor.
 --
---   *** THIS IS NOT WHERE THE SUPABASE CLI LOOKS. ***
---
---   It lives in the contractor app's folder so that this branch touches nothing
---   outside `contractor/` and cannot conflict with anyone else's work. The CLI
---   only reads `supabase/migrations/`, so `supabase db push` will NOT apply it
---   from here. To apply it, do one of:
---
---     cp contractor/migrations/20260903000000_cancel_returns_pothole.sql \
---        supabase/migrations/ && supabase db push
---
---   or paste this file into the SQL editor.
---
---   Until it is applied, the contractor app's "Cannot repair — escalate" action
---   silently strands the pothole (see below). The app cannot detect this; the
---   only symptom is a pothole that never comes back to the queue.
+-- Until it is applied, the contractor app's "Cannot repair — escalate" action
+-- strands the pothole silently: the app cannot detect the missing branch, and
+-- the only symptom is a pothole that never comes back to the repair queue.
 --
 -- Why
 --   `sync_pothole_status` in the init migration handles two transitions:
