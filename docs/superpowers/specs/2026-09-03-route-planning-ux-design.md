@@ -1,6 +1,7 @@
 # Route planning - dispatcher dials and a driver navigation view
 
 Date: 2026-09-03. Status: design, not yet built. Branch context: `pathing-port`.
+Revised 2026-09-03: route anchors narrowed to the depot or a pothole (the owner's decision).
 
 Design rules are `docs/design/DESIGN.md` and `CLAUDE.md`; data and endpoint contracts are
 `docs/ARCHITECTURE.md`. This document changes the §5 contract and the §6 crew page and says
@@ -31,16 +32,16 @@ Fixed, agreed with the product owner; not up for re-litigation here.
 | Decision | Choice |
 |---|---|
 | Split | Planning stays on the console; `/route/:id` becomes the driver view. Two screens, one plan. `crews`, `plan_date`, `route_plans` and the dispatch email all stay meaningful. |
-| Four dials | Start (current location / saved address / crew depot / a pothole; default current location). End (same as start / a different address / a chosen pothole; default same as start). Budget (time or stop count; default time). Selection (automatic or manual; default automatic). |
+| Four dials | Start (crew depot / a pothole; default depot). End (same as start / a pothole; default same as start, keeping the depot-to-depot loop). Budget (time or stop count; default time). Selection (automatic or manual; default automatic). Nothing else anchors a route: no addresses and no browser location on the console. Crews start and end their day at a depot - "You aren't filling in potholes from home." |
 | Existing modes | Budget and Selection are the existing `mode: manual / count / time` regrouped. Start and End are new. |
-| Scope | Full: geocoding, saved addresses (new table and migration), open routes, direction arrows, and a drive animation with a countdown and changing directions. Chosen knowing much of it is invisible in a 2-minute pitch. |
-| Area tool | The shift-drag rectangle goes. A "Plan route" button replaces it; its one-click default is start at current location, drive to the nearest pothole, loop back. |
+| Scope | Narrowed by the owner from an earlier, wider draft: open routes, direction arrows, a drive animation with a countdown and changing directions, and the crew page build. Because anchors are the depot or a pothole only, there is no address lookup, no new table, and **no migration at all**. The narrowing was the owner's call. |
+| Area tool | The shift-drag rectangle goes. A "Plan route" button replaces it; its one-click default is start at the crew depot, drive to the open pothole nearest the depot, loop back. |
 | Animation intent | It should "display the purpose of the feature, not necessarily how it works" - a theatrical playback is sanctioned. |
 
 Two terms used throughout:
 
-- **Anchor** - a coordinate the route must start or end at. It may carry a pothole id, in
-  which case that pothole is also a stop.
+- **Anchor** - a coordinate the route must start or end at: the crew's depot, or an open
+  pothole. A pothole anchor is also a stop.
 - **Open route** - a route whose end anchor differs from its start anchor. Today every
   route is closed (a loop).
 
@@ -51,32 +52,41 @@ pure function in `src/lib/solver/heuristic.ts`; the crew page stays a login-free
 reads `route_plans_map` and PATCHes `work_orders`. What changes:
 
 ```
-console  ── geolocation / saved_addresses_map / GET /api/geocode ─▶ resolves anchors to [lng, lat]
-console  ── POST /api/plan-route { …, start, end } ──────────────▶ planRoute.ts
-planRoute ── OSRM /table (matrix incl. anchors) ─────────────────▶ solve(candidates, matrix, { endIndex })
-planRoute ── OSRM /route?steps=true ─────────────────────────────▶ path + turn instructions
-planRoute ── route_plans (objective carries anchors + steps) ────▶ work_orders as today
-crew page ── route_plans_map nested query ───────────────────────▶ map + arrows + instructions + playback
+console  ── POST /api/plan-route { …, start_pothole_id?, end_pothole_id? } ─▶ planRoute.ts
+planRoute ── resolves anchors: crews.depot, or a queue pothole by id ───────▶ [lng, lat] start / end
+planRoute ── OSRM /table (matrix incl. anchors) ────────────────────────────▶ solve(candidates, matrix, { endIndex })
+planRoute ── OSRM /route?steps=true ────────────────────────────────────────▶ path + turn instructions
+planRoute ── route_plans (objective carries anchors + steps) ───────────────▶ work_orders as today
+crew page ── route_plans_map nested query ──────────────────────────────────▶ map + arrows + instructions + playback
 ```
 
 Design rules that shape everything below:
 
-- **Anchors are resolved to coordinates on the client, before the request.** Geolocation is
-  a browser API, saved addresses are readable rows, and a pothole's `lng`/`lat` is already
-  on `potholes_map`. The server therefore never geocodes, never calls the browser, and
-  `planRoute.ts` gains no new I/O dependency beyond one lookup when an anchor names a
-  pothole. Rejected: a `kind`-tagged anchor union resolved server-side - four server
-  branches and a geocoder dependency inside the solver path, for no gain.
+- **Anchors are resolved to coordinates on the server, from ids.** The client names a
+  pothole or stays silent; it never sends a coordinate. An earlier draft of this design
+  resolved anchors on the client, and rejected server-side resolution because its four
+  anchor kinds would have meant four server branches and an address-lookup dependency
+  inside the solver path. With only two kinds of
+  anchor that reasoning inverts: the depot is a column on the `crews` row `planRoute.ts`
+  already loads, and the pothole lookup is the same queue lookup the forced-stop handling
+  needs anyway (§4). There is no browser-only source left, so the client holds nothing
+  the server does not already hold, and letting it send coordinates would only create a
+  way for the two to disagree. Rejected: keeping client-side resolution - it would force
+  coordinate range validation and a trust decision that an id-based contract makes
+  unnecessary, for no gain.
 - **The matrix stays on OSRM.** Google's Route Matrix bills per element - origins times
   destinations - so one 60-candidate plan is 62 × 62 = 3,844 billable events against a
   10,000 per month free tier. Three plans would end the month. OSRM stays the default and
   nothing in this design calls Google for a matrix.
 - **Turn instructions come from OSRM too** (`steps=true` on the existing `/route` call),
-  not Google Compute Routes. §10 says why.
-- **No new columns on existing tables.** Anchors and steps ride in `route_plans.objective`
-  (jsonb, already documented as "solver inputs/outputs"). The one new table is
-  `saved_addresses` (§6). This matters because migrations auto-deploy: anything merged to
-  `main` is applied to the live Supabase project by the GitHub integration.
+  not Google Compute Routes. §9 says why.
+- **No schema change, and no migration at all.** Anchors and steps ride in
+  `route_plans.objective` (jsonb, already documented as "solver inputs/outputs"), and
+  nothing else in this design touches the database. This matters because migrations
+  auto-deploy: anything merged to `main` is applied to the live Supabase project by the
+  GitHub integration. A design that ships no migration cannot break the live database on
+  merge, so the whole feature can ride in ordinary UI and server PRs with no separately
+  reviewed database work.
 
 ## 4. Solver changes - open routes
 
@@ -159,14 +169,16 @@ stops in descending priority order, start to end - so the "% shorter" number sta
 
 ### Forced stops (anchor is a pothole)
 
-When `start.pothole_id` or `end.pothole_id` is set, that pothole is both anchor and stop.
+When `start_pothole_id` or `end_pothole_id` is set, that pothole is both anchor and stop.
 Handled in `planRoute.ts`, not in `solve()`, so the solver keeps its clean "anchors are
 coordinates" model:
 
 1. Look the pothole up server-side (from the merged queue that `loadQueue` already builds,
    so a replan can reuse a pothole the outgoing plan holds). Its coordinates become the
-   anchor; client-sent `lng`/`lat` for that anchor are ignored. Not found or not open:
-   400, "That start pothole is not in the repair queue." (or end, respectively).
+   anchor. This lookup is the only anchor resolution the server performs: the depot case
+   reads `crews.depot` from the crew row `planRoute.ts` already loads, exactly as today.
+   Not found or not open: 400, "That start pothole is not in the repair queue." (or end,
+   respectively).
 2. Remove it from the candidate list so the solver cannot also insert it mid-route.
 3. In `time` mode, pass `timeBudgetMin - serviceMin × forcedCount` to `solve()`, because
    `tourMin` only charges service for solver-chosen stops.
@@ -176,7 +188,7 @@ coordinates" model:
    `replaceExistingPlan` (cancel, reset freed potholes to `confirmed`, delete) keeps
    working untouched - it operates on pothole ids, not on how they were chosen.
 5. The same id as both start and end pothole means a loop at that pothole: one forced
-   stop, `endIndex = 0`.
+   stop, `endIndex = 0` (§5 normalises this case before it reaches here).
 
 ETAs: `buildEtas` currently walks the matrix from index 0. It gains the forced stops: a
 forced start stop's ETA is the shift start itself, and its service minutes offset every
@@ -194,26 +206,22 @@ anchors themselves, so nothing is duplicated.
 In `dashboard/src/lib/types.ts`:
 
 ```ts
-/** A coordinate the route starts or ends at. `pothole_id` makes it a stop too. */
-export interface PlanAnchor {
-  lng: number;
-  lat: number;
-  label?: string;      // "Current location", "Depot", a saved-address label, a pothole ref
-  pothole_id?: string;
-}
-
 export interface PlanRouteRequest {
   // …existing fields unchanged…
-  start?: PlanAnchor;  // default: the crew depot
-  end?: PlanAnchor;    // default: same as start (a closed loop)
+  start_pothole_id?: string;   // omit for the crew depot
+  end_pothole_id?: string;     // omit for "same as start"
 }
 
 export interface PlanRouteResponse {
   // …existing fields unchanged…
-  start: { lng: number; lat: number; label?: string };
-  end: { lng: number; lat: number; label?: string };
+  start: { lng: number; lat: number; label: string };
+  end: { lng: number; lat: number; label: string };
 }
 ```
+
+There is no coordinate anywhere in the request. The client names a pothole by id or stays
+silent (the depot; a loop); the server resolves both anchors to coordinates (§3) and
+echoes them, labelled ("Depot", or the pothole's "ref - street"), in the response.
 
 - **Existing callers do not break.** Both request fields are optional and their absence
   reproduces today's behaviour exactly (depot loop), so the synthetic data source, the
@@ -221,84 +229,41 @@ export interface PlanRouteResponse {
   learns the new dials. The response additions are new fields beside old ones;
   `DispatchSheet.tsx` and `RouteLayer.tsx` read named fields and are unaffected until
   updated.
-- `validatePlanRequest` grows the checks: `lng` in [-180, 180], `lat` in [-90, 90],
-  `pothole_id` a UUID, `label` a string if present, each stated as one plain sentence.
-  An `end` deep-equal to `start` is normalised to "no end" (a loop).
-- `route_plans.objective` already stores the whole request, so the anchors persist with no
-  schema change. The response's `start` / `end` echo lets `RouteLayer.tsx` finally draw
-  the real start marker instead of the synthetic `DEPOT` constant - a live bug in Supabase
-  mode today.
+- `validatePlanRequest` grows exactly two checks: `start_pothole_id` and `end_pothole_id`,
+  when present, must each be a UUID, stated as one plain sentence. An `end_pothole_id`
+  equal to `start_pothole_id` is normalised to "no end" - a loop at that pothole (§4's
+  single forced stop, `endIndex = 0`). Whether an id names a pothole actually in the queue
+  is checked later, in `planRoute.ts`, where the queue is already loaded (§4's 400).
+- `route_plans.objective` already stores the whole request; `planRoute.ts` additionally
+  writes the **resolved** anchors (coordinates plus label) into `objective` beside it, so
+  the crew page and `dispatch.ts` never re-resolve an anchor. No schema change (§3). The
+  response's `start` / `end` echo lets `RouteLayer.tsx` finally draw the real start
+  marker instead of the synthetic `DEPOT` constant - a live bug in Supabase mode today.
 - `dispatch.ts` builds Google Maps deep links from the depot today; it must read the
-  anchors from `objective.request.start` / `.end`, falling back to the crew depot for
-  plans made before this change.
+  resolved anchors from `objective`, falling back to the crew depot for plans made before
+  this change.
 - The `area` filter stays in the contract (it is a candidate filter, orthogonal to the
   dials) even though the console stops offering a way to draw one; removing server support
   would be a drive-by.
 
-## 6. Schema and migration - saved addresses
-
-One new migration, `supabase/migrations/20260904000000_saved_addresses.sql`:
-
-```sql
-create table saved_addresses (
-  id            uuid primary key default gen_random_uuid(),
-  authority_id  uuid not null references authorities(id),
-  label         text not null,                      -- "Vauxhall yard"
-  address_text  text not null,                      -- what the geocoder matched
-  location      geography(Point, 4326) not null,
-  created_at    timestamptz not null default now(),
-  unique (authority_id, label)
-);
-
-alter table saved_addresses enable row level security;
-create policy demo_all on saved_addresses for all using (true) with check (true);
-
-create view saved_addresses_map with (security_invoker = true) as
-select a.id, a.authority_id, a.label, a.address_text, a.created_at,
-       st_x(a.location::geometry) as lng,
-       st_y(a.location::geometry) as lat
-from saved_addresses a;
-```
-
-- `authority_id` for the same reason it is on everything: tenancy is a policy change
-  later, not a schema change. The `demo_all` policy matches every other table.
-- Clients read `saved_addresses_map` (geography never reaches the browser) and insert
-  through PostgREST with EWKT `SRID=4326;POINT(lng lat)` - the same pattern as every
-  other write. Insert and delete go through the data-source layer
-  (`src/lib/data/supabase.ts` / `synthetic.ts`), not from components.
-- **Auto-deploy warning:** the Supabase project applies migrations on push to `main`.
-  This file is live wiring the moment PR #2's chain merges. It is purely additive (new
-  table, new view, no touch on existing objects), which is the only kind of migration that
-  should ride along with UI work; anything destructive would need its own reviewed PR.
-- Rejected: `start_*` / `end_*` columns on `route_plans`, and a `steps` column. Both
-  would force dropping and recreating `route_plans_map` (a `select r.*` view cannot be
-  `create or replace`d when the base table's column order changes) inside an
-  auto-deploying migration, to store what jsonb already stores.
-
-## 7. Console (dispatcher) UI
+## 6. Console (dispatcher) UI
 
 All inside `DispatchSheet.tsx` and the store; the sheet remains the product's only
-interrupting surface.
+interrupting surface. The console never asks the browser for the operator's position -
+the only geolocation in the product is the crew page's follow mode (§7).
 
 ### The four dials
 
 The sheet's planning section becomes four labelled rows, in this order: Start, End,
 Selection, Budget.
 
-- **Start** - a segmented choice: "Current location" (default), "Depot", "Address",
-  "Pothole".
-  - Current location: resolved when Plan route is pressed, via
-    `navigator.geolocation.getCurrentPosition` with a 5-second timeout. Denied or timed
-    out: fall back to the depot and say so in the sheet - "Location unavailable; planning
-    from the depot." Never prompt for permission before the operator acts.
-  - Depot: the crew's `depot`, as today.
-  - Address: a picker over `saved_addresses_map` rows plus a free-text field with a
-    "Find address" button (§11). A found address can be saved with a label in the same
-    row.
+- **Start** - a segmented choice: "Depot" (default), "Pothole".
+  - Depot: the crew's `depot`, as today. This is where the day starts unless the
+    dispatcher deliberately says otherwise.
   - Pothole: a select listing the open queue as "ref - street" (the data is already in
     the store). Rejected: an arm-a-mode-then-click-the-map interaction - more build for a
     picker the queue list already provides.
-- **End** - "Same as start" (default), "Address", "Pothole". Same pickers.
+- **End** - "Same as start" (default), "Pothole". Same picker.
 - **Selection** - "Automatic" (default) / "Manual". Manual maps to the existing
   `mode: "manual"` and uses the map selection as today.
 - **Budget** - "Time" (default) / "Stops", with the existing minutes / stops inputs.
@@ -314,56 +279,52 @@ Automatic + Stops → `count`; Automatic + Time → `time`. No API change for th
 
 ```ts
 type AnchorChoice =
-  | { kind: "current" }
   | { kind: "depot" }
-  | { kind: "saved"; id: string }
-  | { kind: "geocoded"; lng: number; lat: number; label: string }
   | { kind: "pothole"; id: string };
 
 planner: {
   // …existing…
-  start: AnchorChoice;                     // default { kind: "current" }
+  start: AnchorChoice;                     // default { kind: "depot" }
   end: AnchorChoice | { kind: "same" };    // default { kind: "same" }
 }
 ```
 
-The `planRoute()` action resolves choices to `PlanAnchor`s (geolocation, the loaded
-saved-address rows, `potholes[id]`) before POSTing. `area` and `setArea` are removed from
-the store along with the drawing state (`drawing`), `useAreaDrag.ts` and `AreaLayer.tsx`;
-`ConsoleMap.tsx` drops the drag handlers. The `area` field stays in the request type per
-§5 but nothing sends it.
-
-The store also loads saved addresses at start-up (a new `ConsoleDataSource` method,
-`savedAddresses(): Promise<SavedAddress[]>`, plus `saveAddress` / `deleteAddress`).
+The `planRoute()` action maps choices to wire fields mechanically: `depot` and `same`
+omit the field, `pothole` sends the id as `start_pothole_id` / `end_pothole_id`. No
+lookups, no coordinates, no asynchronous resolution step. `area` and `setArea` are
+removed from the store along with the drawing state (`drawing`), `useAreaDrag.ts` and
+`AreaLayer.tsx`; `ConsoleMap.tsx` drops the drag handlers. The `area` field stays in the
+request type per §5 but nothing sends it.
 
 ### The Plan route button
 
 Shift-drag is gone; in its place the map gets one quiet button (bottom-left, over the
 map, beside the key): **"Plan route"**. One click:
 
-1. Resolve current location (fallback: depot, with the sentence above).
-2. Find the nearest open pothole by straight-line distance (a pure helper next to
-   `haversineKm`; client-side, no request).
-3. POST a `manual` plan for the default crew: `pothole_ids: [nearest]`, `start` = the
-   resolved point, no `end` (loop).
-4. Open the sheet showing the result, exactly as a planned state shows today.
+1. Find the nearest open pothole to the crew's depot by straight-line distance (a pure
+   helper next to `haversineKm`; client-side, no request - the depot and the queue are
+   both already in the store).
+2. POST a `manual` plan for the default crew: `pothole_ids: [nearest]`, no anchor fields
+   (a depot loop - today's wire shape exactly).
+3. Open the sheet showing the result, exactly as a planned state shows today.
 
-This is the demo's fast path: press one button, a route appears from where you are
-standing to the worst nearby road defect and back. The sheet's full dials remain the
-deliberate path. Rejected: making the button plan a full day (time budget) - the
-one-click promise is "show me a route now", and one stop keeps it under two seconds even
-on the public OSRM server.
+This is the demo's fast path: press one button, a route appears from the depot to the
+worst nearby road defect and back. The sheet's full dials remain the deliberate path.
+Rejected: making the button plan a full day (time budget) - the one-click promise is
+"show me a route now", and one stop keeps it under two seconds even on the public OSRM
+server.
 
 ### Route display
 
 `RouteLayer.tsx` draws the start marker from `plan.start` and, when the route is open, a
 distinct end marker from `plan.end` (same 12 px hollow square; the open case labels them
-"Start" / "End" instead of "Depot"). Direction arrows per §9. When the start is far from
-the stops - the real data has every pothole about 15.6 km from the seeded depot, and demo-day
-geolocation will be further - the summary line gains "first stop 15.6 km away" so the
-total is explainable, and the map fits the whole route including the start.
+"Start" / "End" instead of "Depot"). Direction arrows per §8. When the start is far from
+the stops - the real data has every pothole about 15.6 km from the seeded depot - the
+summary line gains "first stop 15.6 km away" so the total is explainable, and the map
+fits the whole route including the start. §13 records the design-level consequence of
+that distance.
 
-## 8. Crew page (driver) UI
+## 7. Crew page (driver) UI
 
 `/route/:id` goes from stub to the driver view. Mobile-first, tokens only, no login, and
 it must remain useful with everything denied or absent.
@@ -377,7 +338,7 @@ dashboard/src/components/crew/
   DriveMap.tsx                            MapLibre map: route line, arrows, stops, position dot
   StopCard.tsx                            current stop: photo, arrived / done, GMaps link
   StopList.tsx                            all stops in order, done ones struck through
-usePlayback.ts (in components/crew/)      the animation clock (§10)
+usePlayback.ts (in components/crew/)      the animation clock (§9)
 dashboard/src/lib/crew/
   along.ts                                pure: cumulative distance, point-at-distance, step-at-distance
   along.test.ts
@@ -412,7 +373,12 @@ the current stop card and the stop list beneath it.
 State is optimistic: the button reflects the PATCH immediately and reverts with one plain
 sentence on failure ("Could not save that. Check the signal and try again.").
 
-### Geolocation
+### Geolocation (follow mode)
+
+This section is intact and deliberate: the follow mode is the one place geolocation
+exists in the product. Removing the browser's location from the console's planner (§2)
+changes nothing here - the driver following their own position on the road is a separate
+feature from the dispatcher choosing where a route starts.
 
 - Requested only when the driver taps "Follow my position", never on load. A permission
   prompt on open would fire during the pitch's screen-share at the worst moment.
@@ -420,7 +386,7 @@ sentence on failure ("Could not save that. Check the signal and try again.").
   `GeolocationCoordinates.heading` when moving, else the bearing between successive
   fixes). The map follows the dot only while the driver has not panned; a pan breaks
   follow, a "Re-centre" button restores it.
-- The next-instruction banner (§10's step logic) keys off whichever position source is
+- The next-instruction banner (§9's step logic) keys off whichever position source is
   active: the real dot when following, the playback marker during a preview.
 - Denied, or the fix is more than 2 km from the route: the page stays fully usable as a
   list-and-map. A one-line notice, not an error: "Location is off. Stops are shown in
@@ -431,7 +397,7 @@ sentence on failure ("Could not save that. Check the signal and try again.").
   the dispatch email's `NEXT_PUBLIC_APP_URL` must be the deployed https URL for the
   follow mode to exist on a phone. The page's denied path covers this automatically.
 
-## 9. Direction arrows
+## 8. Direction arrows
 
 Arrowheads along the route line, pointing the direction of travel, on both screens.
 
@@ -450,7 +416,7 @@ Arrowheads along the route line, pointing the direction of travel, on both scree
 - Arrows need only the geometry, so they survive the straight-line OSRM fallback
   unchanged.
 
-## 10. Animation
+## 9. Animation
 
 A "Preview drive" button on the crew page plays the route: a vehicle marker moves along
 the path, the header counts down, and the instruction banner changes as turns pass.
@@ -493,36 +459,7 @@ OSRM gives real ones for the same request). When the OSRM call fails and the pla
 back to the straight-line path, `steps` is empty and the banner shows the next stop's
 street name instead of a turn - the playback still runs.
 
-## 11. Geocoding and saved addresses
-
-Geocoding: turning typed text ("Abbey Orchard St, SW1P") into a coordinate.
-
-- **Provider: Google Geocoding API**, behind a new server route `/api/geocode`
-  (handler at `dashboard/src/app/api/geocode/route.ts`, logic in
-  `src/lib/server/geocode.ts` behind a `Geocoder` interface, mirroring how `osrm.ts`
-  wraps OSRM). The key already exists in the project (used for Maps deep links and the
-  abandoned Google-basemap branch); it needs the Geocoding API enabled in the Google
-  console and lands in the server-only env as `GOOGLE_MAPS_API_KEY` - it must never be
-  `NEXT_PUBLIC_`.
-- **Why Google over Nominatim:** Nominatim (the free OpenStreetMap geocoder) allows about
-  one request per second, forbids autocomplete-style use outright, and offers no
-  service-level commitment - a rate-limit rejection live on stage is a real risk for a
-  free service. Google is billed per request (of the order of a few dollars per thousand
-  calls beyond its monthly free allowance), but this design only ever geocodes on an
-  explicit "Find address" button press - never per keystroke, no autocomplete - so real
-  usage is tens of requests a month, comfortably inside the free allowance. The
-  `Geocoder` interface keeps Nominatim available as a drop-in if the key cannot be
-  enabled in time.
-- Request `{ query: string }`, biased to the UK (`region=gb`); response
-  `{ lng, lat, formatted: string }` or a 404 with "No match for that address." The
-  console shows the formatted match before it is used, so a wrong match is caught by the
-  operator, not by the route.
-- **Saved addresses** close the loop: a found address gets a "Save as…" affordance
-  (label input), inserting into `saved_addresses` through the data source; the picker
-  reads `saved_addresses_map`. The synthetic data source keeps two hard-coded addresses
-  in memory so the whole flow works offline. Schema and tenancy in §6.
-
-## 12. Error handling and degradation
+## 10. Error handling and degradation
 
 The existing failure ladder (OSRM down → straight-line matrix and path, marked
 `estimated`) is preserved and extended. Every failure is one plain sentence in the sheet
@@ -530,19 +467,17 @@ or a one-line notice on the crew page; nothing throws a state away.
 
 | Failure | Behaviour |
 |---|---|
-| Geolocation denied / timed out (console) | Plan from the depot; "Location unavailable; planning from the depot." |
 | Geolocation denied (crew page) | List-and-map mode; "Location is off. Stops are shown in driving order." |
 | Real position far from route (crew page) | No auto-follow; distance to first stop stated; GMaps deep link for the first leg. |
-| Geocode: no match | "No match for that address." Field keeps its text. |
-| Geocode: key missing / API error | 503, "Address lookup is unavailable."; saved addresses and every other Start / End option still work. |
 | OSRM `/table` down | Straight-line matrix at 25 km/h, `estimated: true`, as today - anchors included. |
 | OSRM `/route` down | Straight polyline through the ordered points, `estimated: true`; no `steps`, so no turn banner; arrows still drawn. |
 | Anchor pothole not in the queue | 400, "That start pothole is not in the repair queue." (or end). |
+| Anchor id not a UUID | 400 from `validatePlanRequest`, one plain sentence, before any lookup. |
 | Unreachable anchor (Infinity matrix cell) | The existing 400, "Some of those potholes cannot be reached by road." - the message already covers anchors because they are matrix points. |
-| Start and stops far apart (the real data: 93 potholes ~15.6 km from the depot, all within ~330 m of each other) | Not an error. The summary states the first-leg distance; the map fits the whole route; the time budget honestly absorbs the transit. The design never assumes a pleasing spread. |
+| Start and stops far apart (the real data: 93 potholes ~15.6 km from the depot, all within ~330 m of each other) | Not an error. The summary states the first-leg distance; the map fits the whole route; the time budget honestly absorbs the transit. The design never assumes a pleasing spread. §13 records the structural consequence. |
 | Replan with anchors | Unchanged path through `replaceExistingPlan`: cancel old work orders, reset freed potholes to `confirmed` (except carried-over ones), delete, insert. Forced anchor stops participate as ordinary work orders. |
 
-## 13. Testing strategy
+## 11. Testing strategy
 
 Vitest, pure logic only, as the repo already does. New and extended:
 
@@ -550,24 +485,25 @@ Vitest, pure logic only, as the repo already does. New and extended:
   leg; time budget respects the leg to the end; 2-opt uncrosses a deliberately crossed
   open path; and a regression pin that `endIndex: 0` (and omitted) reproduces today's
   closed-tour outputs exactly on the existing fixtures.
-- `planRoute.test.ts` - request without anchors is byte-identical to today (the
-  back-compat pin); `start` as a point changes matrix point 0; `end` as a point appends a
-  matrix point and the response echoes both; a pothole anchor is forced to the boundary,
-  removed from candidates, renumbered from 1, and charged service time against the
-  budget; anchor-pothole-not-in-queue is a 400; `objective` carries anchors and steps.
+- `planRoute.test.ts` - request without anchor fields is byte-identical to today (the
+  back-compat pin); `start_pothole_id` resolves server-side to matrix point 0, is removed
+  from the candidates, renumbered from 1, and charged service time against the budget;
+  `end_pothole_id` appends a matrix point and the response echoes both anchors with
+  labels; `end_pothole_id` equal to `start_pothole_id` collapses to a loop; an id not in
+  the queue is a 400; a malformed id is a 400 from validation; `objective` carries the
+  resolved anchors and steps.
 - `osrm.test.ts` - `steps=true` parsing, including a response with no steps.
-- `geocode.test.ts` - provider client parsing, no-match, and the key-missing path,
-  with a mocked fetch (never a live call in tests).
 - `along.test.ts` - cumulative distances; `pointAt` at 0, mid-leg, and past the end
   (clamps); `stepAt` picks the right instruction either side of a turn.
-- `store.test.ts` - dial-to-mode mapping; anchor resolution with a stubbed geolocation
-  (grant, deny, timeout → depot fallback); the nearest-pothole helper.
+- `store.test.ts` - dial-to-mode mapping; choice-to-wire-field mapping (depot and
+  same-as-start omit the field, pothole sends the id); the nearest-pothole-to-the-depot
+  helper.
 - Verification for the visual pieces (arrows, playback, crew page actions) is by running
   the demo script end to end - plan from the console, open `/route/:id` on a phone-sized
   viewport, press Preview drive, mark a stop done, watch the pin turn green. Component
   tests add little here for a demo, matching the console spec's judgement.
 
-## 14. Build order
+## 12. Build order
 
 Demo-visible work first; the deadline is unknown, so everything after the cut line must
 be genuinely skippable without leaving stubs visible on stage.
@@ -576,47 +512,52 @@ be genuinely skippable without leaving stubs visible on stage.
    with Arrived / photo / Done, GMaps links. This is demo beat 7 and today it is a stub -
    the highest-value item on the list. No solver or contract changes needed.
 2. **Direction arrows** on both screens. Small, visible, no server work.
-3. **"Plan route" button** and shift-drag removal, with the movable start anchor. Needs
-   only the anchor-substitution slice of §4 and §5 (`start`, matrix point 0, response
-   echo) - a loop anchored somewhere new is not an open route, so `endIndex` work is not
-   required yet. This makes the console demo start from the presenter's actual location.
+3. **"Plan route" button** and shift-drag removal. The button needs no solver or contract
+   change at all: its plan is a `manual` depot loop with one stop - today's wire shape -
+   and the nearest-pothole-to-the-depot helper is client-side (§6). Purely console work.
 4. **Preview drive animation** with countdown and changing instructions. Needs
-   `steps=true` and `objective.steps` from §10, plus `along.ts` / `usePlayback.ts`.
+   `steps=true` and `objective.steps` from §9, plus `along.ts` / `usePlayback.ts`.
 5. **Crew-page geolocation follow mode.** Real position dot, heading, re-centre.
 
 **- cut line -** everything above is what the 2-minute pitch can show.
 
-6. **Open routes**: `endIndex` through `heuristic.ts`, the `end` anchor, forced pothole
-   stops, the End dial in the sheet.
-7. **Geocoding**: `/api/geocode`, the Address option on the Start / End dials.
-8. **Saved addresses**: the migration (its own commit, per §6's auto-deploy note), the
-   view, data-source methods, the picker and "Save as…".
+6. **Open routes and pothole anchors**: `endIndex` through `heuristic.ts`,
+   `start_pothole_id` / `end_pothole_id` through §5, forced pothole stops per §4, and the
+   Start / End dials in the sheet (§6). The dials land with this step - before it, the
+   sheet's defaults (depot, same as start) are the only behaviour, which is today's
+   behaviour.
 
-Steps 6 to 8 are the invisible infrastructure the owner chose with eyes open; they are
-sequenced last so that running out of time costs nothing the audience would see. Within
-them, 6 before 7 and 8 because the End dial is worthless without open routes, while
-geocoding and saved addresses each stand alone.
+Step 6 is the invisible infrastructure the owner chose with eyes open; it is sequenced
+last because nothing above the cut line depends on it - the demo's fast path is the depot
+loop the contract already speaks - so running out of time costs nothing the audience
+would see.
 
-## 15. Risks and open questions
+## 13. Risks and open questions
 
 - **The public OSRM server is the single point of failure for demo day.** Rate-limited,
   no commitment, and now carrying an extra `steps=true` payload. The `estimated`
   fallback keeps the product alive but visibly poorer (straight lines, no turns).
   Mitigation worth one hour if time allows: a `OSRM_BASE_URL` pointed at a local
   Docker OSRM with the Greater London extract, which also removes the rate limit.
+- **The depot's position is now structural, not cosmetic.** Every route begins and ends
+  at `crews.depot` by construction - there is no other kind of start. With the real data
+  (93 potholes about 15.6 km from the seeded depot, all within about 330 m of each
+  other), roughly 31 km of dead transit - the drive out plus the drive back - is baked
+  into every possible plan, and the solver can only optimise the short local tour between
+  the fixed legs. That is why the optimised total and the priority-order baseline differ
+  by only about 1 percent, and no solver change can improve it. Moving `crews.depot`
+  nearer the worked area is the team's decision, not this design's; what changed is the
+  stakes - it is now a correctness issue for the headline "% shorter" number, not a
+  demo cosmetic.
 - **2-opt on asymmetric durations** remains an approximation (§4). Acceptable at this
   scale; recorded so it is attacked deliberately, not discovered.
 - **`objective` is becoming a grab-bag** (request, candidate count, `estimated`, now
-  anchors and steps). Fine for the MVP because everything in it is write-once at plan
-  time, but the moment anything needs indexing or updating it should graduate to
+  resolved anchors and steps). Fine for the MVP because everything in it is write-once at
+  plan time, but the moment anything needs indexing or updating it should graduate to
   columns - in its own migration.
-- **The Google key's Geocoding enablement is unverified.** Enabling an API on the key is
-  an account action this design cannot perform; if it stalls, the Nominatim drop-in
-  covers the demo at one request per second.
 - **Venue geolocation** may be poor indoors (wifi positioning, tens of metres of error).
-  The Plan route button only needs a rough fix - the nearest pothole 15 km away does not
-  care about 50 m of error - but the crew page's follow mode might jitter; the 2 km
-  far-from-route guard keeps it from thrashing the camera.
+  Only the crew page's follow mode is exposed - the console never reads a position - and
+  it might jitter; the 2 km far-from-route guard keeps it from thrashing the camera.
 - **Open question:** should Preview drive exist on the console too (playing on the
   planned route before dispatch)? It is nearly free once `usePlayback.ts` exists, and
   the pitch's planning beat might land harder with motion. Left out of scope until the
