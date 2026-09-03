@@ -79,12 +79,30 @@ export function validatePlanRequest(body: unknown): PlanRouteRequest | { error: 
     return { error: "area must be a GeoJSON Polygon with a closed outer ring." };
   }
 
+  if (raw.start_pothole_id !== undefined) {
+    if (typeof raw.start_pothole_id !== "string" || !UUID.test(raw.start_pothole_id)) {
+      return { error: "start_pothole_id must be a pothole UUID." };
+    }
+  }
+  if (raw.end_pothole_id !== undefined) {
+    if (typeof raw.end_pothole_id !== "string" || !UUID.test(raw.end_pothole_id)) {
+      return { error: "end_pothole_id must be a pothole UUID." };
+    }
+  }
+
   const req: PlanRouteRequest = {
     crew_id: raw.crew_id,
     plan_date: raw.plan_date,
     mode: raw.mode,
     service_min_per_stop: serviceMin,
     ...(raw.area === undefined ? {} : { area: raw.area as GeoJSON.Polygon }),
+    ...(raw.start_pothole_id === undefined ? {} : { start_pothole_id: raw.start_pothole_id as string }),
+    // An end equal to the start is a loop at that pothole, which is exactly
+    // what an omitted end already means - normalised here so the planner has
+    // one branch fewer (spec §5).
+    ...(raw.end_pothole_id === undefined || raw.end_pothole_id === raw.start_pothole_id
+      ? {}
+      : { end_pothole_id: raw.end_pothole_id as string }),
   };
 
   if (raw.mode === "manual") {

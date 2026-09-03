@@ -117,6 +117,10 @@ export interface PlanRouteRequest {
   time_budget_min?: number; // time
   area?: GeoJSON.Polygon;
   service_min_per_stop?: number;
+  /** Start the route at this queue pothole instead of the crew depot. */
+  start_pothole_id?: string;
+  /** End the route at this queue pothole instead of back at the start. */
+  end_pothole_id?: string;
 }
 
 export interface PlanRouteStop {

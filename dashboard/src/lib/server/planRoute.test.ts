@@ -135,6 +135,31 @@ describe("validatePlanRequest", () => {
     expect(req.time_budget_min).toBeUndefined();
     expect(req.pothole_ids).toBeUndefined();
   });
+
+  it("accepts anchor pothole ids on any mode", () => {
+    const ok = okOf(validatePlanRequest({
+      ...base, mode: "count", max_stops: 3,
+      start_pothole_id: POTHOLE_A, end_pothole_id: POTHOLE_B,
+    }));
+    expect(ok.start_pothole_id).toBe(POTHOLE_A);
+    expect(ok.end_pothole_id).toBe(POTHOLE_B);
+  });
+
+  it("rejects a malformed anchor id with one plain sentence, before any lookup", () => {
+    expect(errorOf(validatePlanRequest({ ...base, mode: "count", max_stops: 1, start_pothole_id: "nope" })))
+      .toMatch(/start_pothole_id/);
+    expect(errorOf(validatePlanRequest({ ...base, mode: "count", max_stops: 1, end_pothole_id: 7 })))
+      .toMatch(/end_pothole_id/);
+  });
+
+  it("normalises an end equal to the start into a loop (no end)", () => {
+    const ok = okOf(validatePlanRequest({
+      ...base, mode: "count", max_stops: 1,
+      start_pothole_id: POTHOLE_A, end_pothole_id: POTHOLE_A,
+    }));
+    expect(ok.start_pothole_id).toBe(POTHOLE_A);
+    expect(ok.end_pothole_id).toBeUndefined();
+  });
 });
 
 // ─── pickCandidates ───────────────────────────────────────────────────────────
