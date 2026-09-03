@@ -280,7 +280,7 @@ async function loadQueue(db: SupabaseClient, existing: ExistingPlan): Promise<Po
  * pothole still referenced by another open work order is left alone.
  *
  * `keepScheduled` holds the potholes the *new* plan will carry over. Their old
- * work orders are still cancelled and deleted, but they are not reset: they are
+ * work orders are still deleted, but their potholes are not reset: they are
  * scheduled before and after, so resetting them would emit a pointless
  * `scheduled → confirmed → scheduled` pair of realtime events that a client can
  * apply out of order. Only genuinely dropped stops flip.
@@ -296,9 +296,18 @@ async function replaceExistingPlan(
 
   if (oldOrders.length > 0) {
     const orderIds = oldOrders.map((w) => w.id);
-    rows(await db.from("work_orders").update({ status: "cancelled" }).in("id", orderIds));
+    // Deleted outright rather than cancelled first. Cancelling was only ever a
+    // marker so the "still held" query below skipped them, and these rows were
+    // deleted a moment later anyway, so the extra step preserved nothing.
+    //
+    // It also keeps the replan independent of `work_orders_sync`, whose
+    // cancelled branch returns a pothole to `confirmed`. Firing that here would
+    // flip every carried-over stop out of `scheduled` and straight back again,
+    // which is precisely the pair of realtime events `keepScheduled` exists to
+    // avoid, and would make the guard below dead code.
+    rows(await db.from("work_orders").delete().in("id", orderIds));
 
-    // Now that these are cancelled, anything still open is a *different* work order.
+    // With them gone, anything still open is a *different* work order.
     const potholeIds = [...new Set(oldOrders.map((w) => w.pothole_id))];
     const stillHeld = rows<{ pothole_id: string }>(
       await db
@@ -318,8 +327,6 @@ async function replaceExistingPlan(
           .in("id", freed),
       );
     }
-
-    rows(await db.from("work_orders").delete().in("id", orderIds));
   }
 
   rows(await db.from("route_plans").delete().in("id", planIds));

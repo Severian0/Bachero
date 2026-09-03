@@ -697,15 +697,18 @@ describe("planRoute", () => {
     expect(resets).toHaveLength(1);
     expect(resets[0].filters.find((f) => f.col === "id")?.values).toEqual(["p-dropped"]);
 
-    // Both old work orders are still cancelled and deleted, A's included.
-    const cancel = writes.find((w) => w.table === "work_orders" && w.op === "update");
-    expect(cancel?.payload).toMatchObject({ status: "cancelled" });
-    expect(cancel?.filters.find((f) => f.col === "id")?.values).toEqual(["wo-1", "wo-2"]);
+    // Both old work orders are deleted outright, A's included.
+    const del = writes.find((w) => w.table === "work_orders" && w.op === "delete");
+    expect(del?.filters.find((f) => f.col === "id")?.values).toEqual(["wo-1", "wo-2"]);
+    // Never cancelled on the way out. The work_orders_sync trigger's cancelled
+    // branch returns a pothole to `confirmed`, which would undo the guard above
+    // and emit the very scheduled/confirmed/scheduled pair it prevents.
+    expect(writes.filter((w) => w.table === "work_orders" && w.op === "update")).toEqual([]);
     expect(tables.work_orders.map((w) => w.id)).not.toContain("wo-1");
     expect(tables.work_orders.map((w) => w.id)).not.toContain("wo-2");
   });
 
-  it("replaces an existing plan: cancels, un-schedules, then deletes", async () => {
+  it("replaces an existing plan: deletes the old work orders, un-schedules only what it drops", async () => {
     const tables = baseTables();
     tables.route_plans = [{ id: "plan-old", crew_id: CREW, plan_date: DATE, status: "draft" }];
     tables.work_orders = [
@@ -722,9 +725,12 @@ describe("planRoute", () => {
 
     await planRoute({ db, osrm: makeOsrm() }, COUNT_REQ);
 
-    // Old work orders were cancelled before being deleted.
-    const cancel = writes.find((w) => w.table === "work_orders" && w.op === "update");
-    expect(cancel?.payload).toMatchObject({ status: "cancelled" });
+    // Old work orders are deleted, never cancelled: cancelling would fire the
+    // trigger branch that returns a pothole to `confirmed`, which this path
+    // decides for itself a few lines later.
+    expect(writes.filter((w) => w.table === "work_orders" && w.op === "update")).toEqual([]);
+    const del = writes.find((w) => w.table === "work_orders" && w.op === "delete");
+    expect(del?.filters.find((f) => f.col === "id")?.values).toEqual(["wo-1", "wo-2"]);
 
     // Only the pothole with no other open work order is reset.
     expect(tables.potholes.find((p) => p.id === "p-old-1")?.status).toBe("confirmed");
