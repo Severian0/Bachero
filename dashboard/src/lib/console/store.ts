@@ -3,6 +3,8 @@ import type {
   ConsoleDataSource, Crew, Detection, DispatchResult, PlanRouteRequest, PlanRouteResponse,
   Pothole, Vehicle,
 } from "@/lib/data/types";
+import { nearestOpenPothole } from "./nearest";
+import { DEPOT } from "@/lib/data/synthetic";
 import { FILTER_CYCLE, isSelectable, type Filter } from "./derive";
 
 export type Mode = "manual" | "count" | "time";
@@ -82,6 +84,8 @@ export interface ConsoleActions {
 
   setPlanner(patch: Partial<PlannerConfig>): void;
   planRoute(): Promise<void>;
+  /** The one-click demo path: depot loop to the worst nearby open defect. */
+  planNearest(): Promise<void>;
   resetPlan(): void;
   dispatch(to: string[]): Promise<void>;
 
@@ -212,6 +216,20 @@ export function createConsoleStore() {
       setSheetOpen(sheetOpen) { set({ sheetOpen }); },
 
       setPlanner(patch) { set((s) => ({ planner: { ...s.planner, ...patch } })); },
+      async planNearest() {
+        const { crews, planner, potholes } = get();
+        const crewId = planner.crewId ?? crews[0]?.id ?? null;
+        // DEPOT matches the seeded crews.depot; the server anchors the real
+        // route at the true depot either way.
+        const nearest = nearestOpenPothole(Object.values(potholes), DEPOT);
+        if (!ds || !crewId || !nearest) return;
+        set((s) => ({
+          planner: { ...s.planner, crewId, mode: "manual" },
+          selected: [nearest.id],
+          sheetOpen: true,
+        }));
+        await get().planRoute();
+      },
       async planRoute() {
         const { planner, selected } = get();
         if (!ds || !planner.crewId) return;

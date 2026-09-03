@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createConsoleStore, DISMISS_UNDO_MS, DISPATCH_ERROR, EMPTY_PLAN_ERROR, PLAN_ERROR } from "./store";
 import type { ConsoleDataSource, Pothole } from "@/lib/data/types";
+import { DEPOT } from "@/lib/data/synthetic";
 
 const base: Pothole = {
   id: "a", authority_id: "x", road_name: "Millbank", street: "Millbank", ref: "BCH-A", stop_order: null,
@@ -310,4 +311,32 @@ describe("console store", () => {
     expect(detections).toHaveBeenCalledTimes(2);
     expect(s.getState().detections["a"]).toEqual(rows);
   });
+
+  it("planNearest plans a one-stop manual route to the open pothole nearest the depot and opens the sheet", async () => {
+    const ds = fakeDs();
+    const s = createConsoleStore();
+    s.getState().setDataSource(ds);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().upsertPothole(p({ id: "near", lng: DEPOT[0] + 0.001, lat: DEPOT[1] }));
+    s.getState().upsertPothole(p({ id: "far", lng: DEPOT[0] + 0.1, lat: DEPOT[1] }));
+    s.getState().upsertPothole(p({ id: "closer-but-repaired", status: "repaired", lng: DEPOT[0], lat: DEPOT[1] }));
+    await s.getState().planNearest();
+    expect(ds.planRoute).toHaveBeenCalledWith(expect.objectContaining({
+      crew_id: "c1", mode: "manual", pothole_ids: ["near"],
+    }));
+    expect(s.getState().sheetOpen).toBe(true);
+    expect(s.getState().planState).toBe("planned");
+  });
+
+  it("planNearest does nothing when no pothole is open", async () => {
+    const ds = fakeDs();
+    const s = createConsoleStore();
+    s.getState().setDataSource(ds);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().upsertPothole(p({ id: "r", status: "repaired" }));
+    await s.getState().planNearest();
+    expect(ds.planRoute).not.toHaveBeenCalled();
+    expect(s.getState().sheetOpen).toBe(false);
+  });
+
 });

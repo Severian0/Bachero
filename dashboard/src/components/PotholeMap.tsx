@@ -33,7 +33,10 @@ export default function PotholeMap() {
       onStatus={onStatus}
       overlay={
         <>
-          <Legend />
+          <div style={{ position: "absolute", left: "var(--s4)", bottom: "var(--s4)", zIndex: 50, display: "grid", gap: "var(--s2)", justifyItems: "start" }}>
+            <PlanRouteButton />
+            <Legend />
+          </div>
           {status !== "ready" && <MapStatusPanel status={status} />}
         </>
       }
@@ -149,6 +152,23 @@ function IconButton({
   );
 }
 
+/** One click: a depot loop to the nearest open defect, planned and shown. */
+function PlanRouteButton() {
+  const planNearest = useConsole((s) => s.planNearest);
+  const planState = useConsole((s) => s.planState);
+  return (
+    <button
+      type="button"
+      className="btn btn-primary"
+      style={{ boxShadow: "var(--shadow-1)" }}
+      disabled={planState === "planning"}
+      onClick={() => void planNearest()}
+    >
+      {planState === "planning" ? "Planning" : "Plan route"}
+    </button>
+  );
+}
+
 const LEGEND: { status: PotholeStatus; note: string; size: number }[] = [
   { status: "suspected", note: "one vehicle", size: 14 },
   { status: "confirmed", note: "corroborated", size: 16 },
@@ -160,10 +180,6 @@ function Legend() {
   return (
     <div
       style={{
-        position: "absolute",
-        left: "var(--s4)",
-        bottom: "var(--s4)",
-        zIndex: 50,
         padding: "var(--s3) var(--s4)",
         background: "var(--surface)",
         border: "1px solid var(--rule)",
