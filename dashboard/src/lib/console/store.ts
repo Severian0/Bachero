@@ -11,6 +11,11 @@ export type Mode = "manual" | "count" | "time";
 export const DISMISS_UNDO_MS = 10_000;
 const TRAIL_LEN = 5;
 
+/** Where a planned route begins. The depot is the crew's own, read server-side. */
+export type AnchorChoice = { kind: "depot" } | { kind: "pothole"; id: string };
+/** Where it ends. "same" is a closed loop back to the start. */
+export type EndChoice = { kind: "same" } | { kind: "pothole"; id: string };
+
 export interface PlannerConfig {
   crewId: string | null;
   mode: Mode;
@@ -18,6 +23,8 @@ export interface PlannerConfig {
   timeBudgetMin: number;
   serviceMinPerStop: number;
   planDate: string; // YYYY-MM-DD
+  start: AnchorChoice;
+  end: EndChoice;
 }
 
 export interface ConsoleState {
@@ -86,6 +93,8 @@ export interface ConsoleActions {
   setPreviewDrive(on: boolean): void;
 
   setPlanner(patch: Partial<PlannerConfig>): void;
+  setStartAnchor(choice: AnchorChoice): void;
+  setEndAnchor(choice: EndChoice): void;
   planRoute(): Promise<void>;
   /** The one-click demo path: depot loop to the worst nearby open defect. */
   planNearest(): Promise<void>;
@@ -136,7 +145,12 @@ export function createConsoleStore() {
       loadState: "loading",
       linkedId: null, pinnedId: null, selected: [], filter: "all",
       sheetOpen: false,
-      planner: { crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20, planDate: tomorrowISO() },
+      planner: {
+        crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20,
+        planDate: tomorrowISO(),
+        start: { kind: "depot" },
+        end: { kind: "same" },
+      },
       planState: "idle", plan: null, planCrewId: null, dispatchState: "idle", dispatchedTo: 0,
       previewDrive: false,
       dispatchResult: null,
@@ -221,6 +235,8 @@ export function createConsoleStore() {
       setPreviewDrive(previewDrive) { set({ previewDrive }); },
 
       setPlanner(patch) { set((s) => ({ planner: { ...s.planner, ...patch } })); },
+      setStartAnchor(start) { set((s) => ({ planner: { ...s.planner, start } })); },
+      setEndAnchor(end) { set((s) => ({ planner: { ...s.planner, end } })); },
       async planNearest() {
         const { crews, planner, potholes } = get();
         const crewId = planner.crewId ?? crews[0]?.id ?? null;
@@ -246,6 +262,13 @@ export function createConsoleStore() {
           ...(planner.mode === "manual" ? { pothole_ids: selected } : {}),
           ...(planner.mode === "count" ? { max_stops: planner.maxStops } : {}),
           ...(planner.mode === "time" ? { time_budget_min: planner.timeBudgetMin } : {}),
+          ...(planner.start.kind === "pothole" ? { start_pothole_id: planner.start.id } : {}),
+          // An end equal to the start is a loop, and the server normalises it away
+          // anyway; dropping it here keeps the request minimal and honest.
+          ...(planner.end.kind === "pothole" &&
+          !(planner.start.kind === "pothole" && planner.start.id === planner.end.id)
+            ? { end_pothole_id: planner.end.id }
+            : {}),
         };
         set({ planState: "planning", planError: undefined, previewDrive: false });
         try {

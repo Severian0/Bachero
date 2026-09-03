@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createConsoleStore, DISMISS_UNDO_MS, DISPATCH_ERROR, EMPTY_PLAN_ERROR, PLAN_ERROR } from "./store";
-import type { ConsoleDataSource, Pothole } from "@/lib/data/types";
+import type { ConsoleDataSource, Crew, Pothole } from "@/lib/data/types";
+import type { PlanRouteRequest } from "@/lib/types";
 import { DEPOT } from "@/lib/data/synthetic";
 
 const base: Pothole = {
@@ -24,6 +25,24 @@ function fakeDs(over: Partial<ConsoleDataSource> = {}): ConsoleDataSource {
     dispatch: vi.fn(async () => ({ sent: true, crewPage: "/route/r1" })),
     ...over,
   };
+}
+
+const CREW: Crew = { id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 };
+
+/** A source that records the wire request every plan sends. */
+function capturingDs(sent: PlanRouteRequest[]): ConsoleDataSource {
+  return fakeDs({
+    planRoute: vi.fn(async (req: PlanRouteRequest) => {
+      sent.push(req);
+      return {
+        route_plan_id: "r1",
+        stops: [{ work_order_id: "w1", pothole_id: "a", stop_order: 1, eta: "2026-09-03T08:20:00.000Z", lng: -0.12, lat: 51.49, severity: 0.5, photo_url: null }],
+        total_km: 1, total_minutes: 2, baseline_km: 3,
+        path: { type: "LineString" as const, coordinates: [] },
+        steps: [], start: DEPOT_ANCHOR, end: DEPOT_ANCHOR,
+      };
+    }),
+  });
 }
 
 describe("console store", () => {
@@ -366,6 +385,56 @@ describe("console store", () => {
     s.getState().setPreviewDrive(true);
     s.getState().resetPlan();
     expect(s.getState().previewDrive).toBe(false);
+  });
+
+  it("defaults to a depot loop and sends no anchor ids", async () => {
+    const s = createConsoleStore();
+    const sent: PlanRouteRequest[] = [];
+    s.getState().setDataSource(capturingDs(sent));
+    s.getState().setCrews([CREW]);
+    s.getState().upsertPothole(p({ id: "a" }));
+    s.getState().toggleSelected("a");
+    s.getState().setPlanner({ mode: "manual" });
+
+    await s.getState().planRoute();
+
+    expect(s.getState().planner.start).toEqual({ kind: "depot" });
+    expect(s.getState().planner.end).toEqual({ kind: "same" });
+    expect(sent[0].start_pothole_id).toBeUndefined();
+    expect(sent[0].end_pothole_id).toBeUndefined();
+  });
+
+  it("sends the chosen pothole anchors", async () => {
+    const s = createConsoleStore();
+    const sent: PlanRouteRequest[] = [];
+    s.getState().setDataSource(capturingDs(sent));
+    s.getState().setCrews([CREW]);
+    s.getState().upsertPothole(p({ id: "a" }));
+    s.getState().upsertPothole(p({ id: "b" }));
+    s.getState().setPlanner({ mode: "count", maxStops: 3 });
+    s.getState().setStartAnchor({ kind: "pothole", id: "a" });
+    s.getState().setEndAnchor({ kind: "pothole", id: "b" });
+
+    await s.getState().planRoute();
+
+    expect(sent[0].start_pothole_id).toBe("a");
+    expect(sent[0].end_pothole_id).toBe("b");
+  });
+
+  it("drops an end anchor equal to the start, because that is a loop", async () => {
+    const s = createConsoleStore();
+    const sent: PlanRouteRequest[] = [];
+    s.getState().setDataSource(capturingDs(sent));
+    s.getState().setCrews([CREW]);
+    s.getState().upsertPothole(p({ id: "a" }));
+    s.getState().setPlanner({ mode: "count", maxStops: 3 });
+    s.getState().setStartAnchor({ kind: "pothole", id: "a" });
+    s.getState().setEndAnchor({ kind: "pothole", id: "a" });
+
+    await s.getState().planRoute();
+
+    expect(sent[0].start_pothole_id).toBe("a");
+    expect(sent[0].end_pothole_id).toBeUndefined();
   });
 
 });
