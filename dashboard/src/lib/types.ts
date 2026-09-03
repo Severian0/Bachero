@@ -137,6 +137,8 @@ export interface PlanRouteResponse {
   total_minutes: number;
   baseline_km: number;
   path: { type: "LineString"; coordinates: [number, number][] };
+  /** Turn instructions along `path`; empty when the route fell back to a straight line. */
+  steps: RouteStep[];
 }
 
 export interface DispatchRequest {

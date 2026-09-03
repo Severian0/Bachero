@@ -206,6 +206,7 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
         total_km: Math.round(sol.totalKm * 10) / 10, total_minutes: Math.round(sol.totalMin),
         baseline_km: Math.round(sol.baselineKm * 10) / 10,
         path: { type: "LineString", coordinates: coords },
+        steps: [],
       };
     },
     async dispatch(req): Promise<DispatchResult> {

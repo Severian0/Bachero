@@ -18,7 +18,7 @@ function fakeDs(over: Partial<ConsoleDataSource> = {}): ConsoleDataSource {
     subscribe: vi.fn(() => () => {}),
     detections: vi.fn(async () => []),
     dismiss: vi.fn(async () => {}),
-    planRoute: vi.fn(async () => ({ route_plan_id: "r1", stops: [{ work_order_id: "w1", pothole_id: "a", stop_order: 1, eta: "2026-09-03T08:20:00.000Z", lng: -0.12, lat: 51.49, severity: 0.5, photo_url: null }], total_km: 1, total_minutes: 2, baseline_km: 3, path: { type: "LineString" as const, coordinates: [] } })),
+    planRoute: vi.fn(async () => ({ route_plan_id: "r1", stops: [{ work_order_id: "w1", pothole_id: "a", stop_order: 1, eta: "2026-09-03T08:20:00.000Z", lng: -0.12, lat: 51.49, severity: 0.5, photo_url: null }], total_km: 1, total_minutes: 2, baseline_km: 3, path: { type: "LineString" as const, coordinates: [] }, steps: [] })),
     dispatch: vi.fn(async () => ({ sent: true, crewPage: "/route/r1" })),
     ...over,
   };
@@ -176,7 +176,7 @@ describe("console store", () => {
 
   it("a plan with no stops is an error, and leaves the selection to be adjusted", async () => {
     const ds = fakeDs({
-      planRoute: vi.fn(async () => ({ route_plan_id: "r1", stops: [], total_km: 0, total_minutes: 0, baseline_km: 0, path: { type: "LineString" as const, coordinates: [] } })),
+      planRoute: vi.fn(async () => ({ route_plan_id: "r1", stops: [], total_km: 0, total_minutes: 0, baseline_km: 0, path: { type: "LineString" as const, coordinates: [] }, steps: [] })),
     });
     const s = createConsoleStore();
     s.getState().setDataSource(ds);
@@ -193,7 +193,7 @@ describe("console store", () => {
   it("a re-plan that yields no stops clears the standing plan the map is drawing", async () => {
     const stop = { work_order_id: "w1", pothole_id: "a", stop_order: 1, eta: "2026-09-03T08:20:00.000Z", lng: -0.12, lat: 51.49, severity: 0.5, photo_url: null };
     const path = { type: "LineString" as const, coordinates: [] };
-    const planRoute = vi.fn(async () => ({ route_plan_id: "r1", stops: [stop], total_km: 1, total_minutes: 2, baseline_km: 3, path }));
+    const planRoute = vi.fn(async () => ({ route_plan_id: "r1", stops: [stop], total_km: 1, total_minutes: 2, baseline_km: 3, path, steps: [] }));
     const ds = fakeDs({ planRoute });
     const s = createConsoleStore();
     s.getState().setDataSource(ds);
@@ -206,7 +206,7 @@ describe("console store", () => {
 
     // Removing the only stop re-plans over nothing. The route line and its
     // numbered stops are drawn from `plan`, so the failure has to take it away.
-    planRoute.mockImplementation(async () => ({ route_plan_id: "r2", stops: [], total_km: 0, total_minutes: 0, baseline_km: 0, path }));
+    planRoute.mockImplementation(async () => ({ route_plan_id: "r2", stops: [], total_km: 0, total_minutes: 0, baseline_km: 0, path, steps: [] }));
     s.getState().toggleSelected("a");
     await s.getState().planRoute();
     expect(s.getState().planState).toBe("error");

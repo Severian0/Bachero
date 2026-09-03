@@ -448,6 +448,7 @@ describe("planRoute", () => {
       candidate_count: 2,
       estimated: false,
       considered_all: true,
+      steps: [],
     });
 
     expect(tables.work_orders).toHaveLength(2);
@@ -516,6 +517,22 @@ describe("planRoute", () => {
   // straight-line distances, because the matrix only ranks candidate orderings
   // and is never shown: losing accuracy beats losing the plan when the public
   // OSRM server rate-limits mid-demo. The plan records that it is estimated.
+  it("renders the OSRM steps, stores them on the plan and echoes them in the response", async () => {
+    const { db, tables } = makeDb(baseTables());
+    const osrm = makeOsrm({
+      route: vi.fn<(points: LngLat[]) => Promise<OsrmRoute>>().mockResolvedValue({
+        geometry: LINE,
+        steps: [
+          { name: "Millbank", distance: 240.4, maneuver: { type: "turn", modifier: "left", location: [-0.125, 51.494] } },
+        ],
+      }),
+    });
+    const result = await planRoute({ db, osrm }, COUNT_REQ);
+    const expected = [{ instruction: "Turn left onto Millbank", lng: -0.125, lat: 51.494, distance_m: 240 }];
+    expect(result.steps).toEqual(expected);
+    expect((tables.route_plans[0].objective as { steps: unknown }).steps).toEqual(expected);
+  });
+
   it("falls back to straight-line distances when the OSRM matrix fails", async () => {
     const { db, tables } = makeDb(baseTables());
     const osrm = makeOsrm({
@@ -538,6 +555,7 @@ describe("planRoute", () => {
     const plan = await planRoute({ db, osrm }, COUNT_REQ);
     // Depot, each stop in order, then back to the depot.
     expect(plan.path.coordinates).toHaveLength(plan.stops.length + 2);
+    expect(plan.steps).toEqual([]);
     expect(tables.route_plans[0].objective).toMatchObject({ estimated: true });
   });
 

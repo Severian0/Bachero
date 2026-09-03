@@ -89,7 +89,7 @@ describe("planCandidates", () => {
       eta: "2026-09-03T08:00:00.000Z", lng: -0.1247, lat: 51.4962, severity: 0.5, photo_url: null,
     })),
     total_km: 1, total_minutes: 2, baseline_km: 3,
-    path: { type: "LineString", coordinates: [] },
+    path: { type: "LineString", coordinates: [] }, steps: [],
   });
   const list = [
     p({ id: "a", status: "suspected", lng: -0.1247, lat: 51.4962 }),

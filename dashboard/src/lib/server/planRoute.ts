@@ -1,12 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LineString, OsrmClient } from "./osrm";
 import { parsePointWkb } from "./wkb";
+import { renderSteps } from "./instructions";
 import { pointInPolygon } from "@/lib/console/area";
 import { solve } from "@/lib/solver/heuristic";
 import { buildMatrix } from "@/lib/solver/haversine";
 import type { LngLat, Matrix } from "@/lib/solver/haversine";
 import { DEFAULT_TIME_ZONE, SHIFT_START_HOUR, shiftStartMs } from "@/lib/solver/schedule";
-import type { PlanRouteRequest, PlanRouteResponse, PlanRouteStop, PotholeMapRow } from "@/lib/types";
+import type { PlanRouteRequest, PlanRouteResponse, PlanRouteStop, PotholeMapRow, RouteStep } from "@/lib/types";
 
 /** Error carrying the HTTP status the route handler should return. */
 export class PlanRouteError extends Error {
@@ -332,8 +333,11 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
   const ordered = solution.order.map((i) => candidates[i]);
   const routePoints: LngLat[] = [depot, ...ordered.map((c): LngLat => [c.lng, c.lat]), depot];
   let line: LineString;
+  let steps: RouteStep[] = [];
   try {
-    line = (await osrm.route(routePoints)).geometry;
+    const routed = await osrm.route(routePoints);
+    line = routed.geometry;
+    steps = renderSteps(routed.steps);
   } catch {
     line = { type: "LineString", coordinates: routePoints.map(([lng, lat]): [number, number] => [lng, lat]) };
     estimated = true;
@@ -357,7 +361,7 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
         total_km: totalKm,
         total_minutes: totalMinutes,
         baseline_km: baselineKm,
-        objective: { request: req, candidate_count: candidates.length, estimated, considered_all: consideredAll },
+        objective: { request: req, candidate_count: candidates.length, estimated, considered_all: consideredAll, steps },
       })
       .select("id"),
   );
@@ -425,5 +429,6 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
     total_minutes: totalMinutes,
     baseline_km: baselineKm,
     path: line,
+    steps,
   };
 }
