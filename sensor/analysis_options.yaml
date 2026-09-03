@@ -1,0 +1,8 @@
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+include: package:flutter_lints/flutter.yaml
+
+# The defaults, deliberately. `flutter analyze` should stay quiet enough that a
+# real warning during a demo is visible.
