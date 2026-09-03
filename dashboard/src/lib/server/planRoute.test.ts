@@ -6,7 +6,6 @@ import {
   buildEtas,
   planStartIso,
   planRoute,
-  PlanRouteError,
 } from "./planRoute";
 import type { OsrmClient, LineString } from "./osrm";
 import type { LngLat, Matrix } from "@/lib/solver/haversine";
@@ -442,7 +441,14 @@ describe("planRoute", () => {
       baseline_km: 13,
       path: "SRID=4326;LINESTRING(-0.1246 51.4994, -0.133 51.4984, -0.129 51.496, -0.1246 51.4994)",
     });
-    expect(plan.objective).toEqual({ request: COUNT_REQ, candidate_count: 2 });
+    // `estimated` and `considered_all` record whether the figures came from the
+    // routing service and whether the whole queue was solved over.
+    expect(plan.objective).toEqual({
+      request: COUNT_REQ,
+      candidate_count: 2,
+      estimated: false,
+      considered_all: true,
+    });
 
     expect(tables.work_orders).toHaveLength(2);
     expect(tables.work_orders[0]).toMatchObject({
@@ -506,16 +512,33 @@ describe("planRoute", () => {
     );
   });
 
-  it("502s when OSRM fails", async () => {
-    const { db } = makeDb(baseTables());
+  // A dead routing service used to fail the whole request. It now degrades to
+  // straight-line distances, because the matrix only ranks candidate orderings
+  // and is never shown: losing accuracy beats losing the plan when the public
+  // OSRM server rate-limits mid-demo. The plan records that it is estimated.
+  it("falls back to straight-line distances when the OSRM matrix fails", async () => {
+    const { db, tables } = makeDb(baseTables());
     const osrm = makeOsrm({
       table: vi
         .fn<(points: LngLat[]) => Promise<Matrix>>()
         .mockRejectedValue(new Error("Route service unavailable")),
     });
-    const error = await planRoute({ db, osrm }, COUNT_REQ).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(PlanRouteError);
-    expect((error as PlanRouteError).status).toBe(502);
+    const plan = await planRoute({ db, osrm }, COUNT_REQ);
+    expect(plan.stops.length).toBeGreaterThan(0);
+    expect(tables.route_plans[0].objective).toMatchObject({ estimated: true });
+  });
+
+  it("falls back to a straight-line path when the OSRM geometry fails", async () => {
+    const { db, tables } = makeDb(baseTables());
+    const osrm = makeOsrm({
+      route: vi
+        .fn<(points: LngLat[]) => Promise<LineString>>()
+        .mockRejectedValue(new Error("Route service unavailable")),
+    });
+    const plan = await planRoute({ db, osrm }, COUNT_REQ);
+    // Depot, each stop in order, then back to the depot.
+    expect(plan.path.coordinates).toHaveLength(plan.stops.length + 2);
+    expect(tables.route_plans[0].objective).toMatchObject({ estimated: true });
   });
 
   it("500s when the database returns an error", async () => {

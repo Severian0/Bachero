@@ -77,3 +77,69 @@ describe("twoOpt", () => {
     expect(tourKm(result, m)).toBeCloseTo(shortestPerimeterKm, 9);
   });
 });
+
+// A matrix where minutes and kilometres disagree, which a straight-line matrix
+// can never be (there minutes = km / speed). Real road matrices do this all the
+// time: a fast dual carriageway is long in km and short in minutes.
+const skew: Matrix = {
+  distanceKm: [
+    [0, 10, 1, 10],
+    [10, 0, 1, 1],
+    [1, 1, 0, 10],
+    [10, 1, 10, 0],
+  ],
+  durationMin: [
+    [0, 1, 20, 1],
+    [1, 0, 1, 20],
+    [20, 1, 0, 1],
+    [1, 20, 1, 0],
+  ],
+};
+
+describe("twoOpt optimises the quantity the budget is spent in", () => {
+  it("leaves a duration-optimal tour alone even when km could be cut", () => {
+    // [0,1,2] is 4 min / 31 km. Reversing to [1,0,2] is 13 km but 42 min.
+    expect(twoOpt([0, 1, 2], skew)).toEqual([0, 1, 2]);
+    expect(tourMin([0, 1, 2], skew, 0)).toBeCloseTo(4, 9);
+  });
+
+  it("would take the km-cheaper, slower tour if pointed at distance", () => {
+    const byKm = twoOpt([0, 1, 2], skew, skew.distanceKm);
+    expect(byKm).not.toEqual([0, 1, 2]);
+    expect(tourKm(byKm, skew)).toBeLessThan(tourKm([0, 1, 2], skew));
+    // This is the regression: optimising km inflates the minutes the time
+    // budget was checked against, so the returned route no longer fits.
+    expect(tourMin(byKm, skew, 0)).toBeGreaterThan(tourMin([0, 1, 2], skew, 0));
+  });
+
+  it("keeps a time-mode solution inside its budget after 2-opt", () => {
+    const skewed = [
+      { id: "a", priority: 3 }, { id: "b", priority: 2 }, { id: "c", priority: 1 },
+    ];
+    const s = solve(skewed, skew, { mode: "time", timeBudgetMin: 10, serviceMin: 0 });
+    expect(s.order.length).toBeGreaterThan(0);
+    expect(s.totalMin).toBeLessThanOrEqual(10);
+  });
+});
+
+describe("solve reports what it left out", () => {
+  it("names the stops a count cap pushed out", () => {
+    const s = solve(cands, m, { mode: "count", maxStops: 2, serviceMin: 20 });
+    expect(s.skipped).toHaveLength(2);
+    expect(s.skipped.every((k) => k.reason === "stop_limit")).toBe(true);
+    const ids = new Set(s.skipped.map((k) => k.id));
+    for (const i of s.order) expect(ids.has(cands[i].id)).toBe(false);
+  });
+
+  it("names the stops a time budget pushed out, with what they would have cost", () => {
+    const s = solve(cands, m, { mode: "time", timeBudgetMin: 50, serviceMin: 20 });
+    expect(s.skipped.length).toBeGreaterThan(0);
+    expect(s.skipped.every((k) => k.reason === "time_budget")).toBe(true);
+    expect(s.skipped.every((k) => k.marginalMin > 0)).toBe(true);
+    expect(s.order.length + s.skipped.length).toBe(cands.length);
+  });
+
+  it("skips nothing in manual mode", () => {
+    expect(solve(cands, m, { mode: "manual", serviceMin: 20 }).skipped).toEqual([]);
+  });
+});

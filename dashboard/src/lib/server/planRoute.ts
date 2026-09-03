@@ -3,7 +3,9 @@ import type { LineString, OsrmClient } from "./osrm";
 import { parsePointWkb } from "./wkb";
 import { pointInPolygon } from "@/lib/console/area";
 import { solve } from "@/lib/solver/heuristic";
+import { buildMatrix } from "@/lib/solver/haversine";
 import type { LngLat, Matrix } from "@/lib/solver/haversine";
+import { DEFAULT_TIME_ZONE, SHIFT_START_HOUR, shiftStartMs } from "@/lib/solver/schedule";
 import type { PlanRouteRequest, PlanRouteResponse, PlanRouteStop, PotholeMapRow } from "@/lib/types";
 
 /** Error carrying the HTTP status the route handler should return. */
@@ -20,6 +22,10 @@ export class PlanRouteError extends Error {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_SERVICE_MIN = 20;
+/** Caps the OSRM /table call. Recorded in `objective`, never applied silently. */
+const MAX_CANDIDATES = 60;
+/** Average urban driving speed for the straight-line fallback matrix. */
+const FALLBACK_KMH = 25;
 /** Work-order statuses that still hold a pothole out of the repair queue. */
 const OPEN_WORK_ORDER_STATUSES = ["open", "assigned", "in_progress"];
 
@@ -116,12 +122,17 @@ export function pickCandidates(queue: PotholeMapRow[], req: PlanRouteRequest): P
 }
 
 /**
- * Shift start: 08:00 on `plan_date` in the *server's* local time zone. Good
- * enough for the demo (the council and the server are both in Europe/London);
- * a real deployment would store a per-authority time zone and start time.
+ * Shift start: 08:00 on `plan_date` in the authority's time zone.
+ *
+ * Resolved explicitly rather than from the server's local time, because the
+ * server is not in the authority's zone once this is deployed: Vercel runs UTC,
+ * which puts every ETA an hour out through British Summer Time.
  */
-export function planStartIso(planDate: string): string {
-  return new Date(`${planDate}T08:00:00`).toISOString();
+export function planStartIso(
+  planDate: string,
+  timeZone: string = process.env.AUTHORITY_TIME_ZONE ?? DEFAULT_TIME_ZONE,
+): string {
+  return new Date(shiftStartMs(planDate, SHIFT_START_HOUR, timeZone)).toISOString();
 }
 
 /**
@@ -159,14 +170,6 @@ interface QueryResult {
 function rows<T>(result: QueryResult): T[] {
   if (result.error) throw new PlanRouteError(500, "The database request failed.");
   return (result.data ?? []) as T[];
-}
-
-async function osrmCall<T>(work: Promise<T>): Promise<T> {
-  try {
-    return await work;
-  } catch {
-    throw new PlanRouteError(502, "The routing service could not be reached.");
-  }
 }
 
 export interface PlanRouteDeps {
@@ -285,11 +288,24 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
 
   const existing = await loadExistingPlan(db, req);
   const queue = await loadQueue(db, existing);
-  const candidates = pickCandidates(queue, req);
+  let candidates = pickCandidates(queue, req);
   if (candidates.length === 0) throw new PlanRouteError(400, "No open potholes match that request.");
+  // The queue is priority-ordered, so clipping keeps the most valuable stops.
+  const consideredAll = candidates.length <= MAX_CANDIDATES;
+  if (!consideredAll) candidates = candidates.slice(0, MAX_CANDIDATES);
 
   const points: LngLat[] = candidates.map((c) => [c.lng, c.lat]);
-  const matrix = await osrmCall(osrm.table([depot, ...points]));
+  // A dead routing service downgrades the numbers rather than killing the plan.
+  // The matrix only ranks candidate orderings; nobody reads it. `estimated` is
+  // recorded on the plan so the console can label figures it cannot stand behind.
+  let estimated = false;
+  let matrix: Matrix;
+  try {
+    matrix = await osrm.table([depot, ...points]);
+  } catch {
+    matrix = buildMatrix([depot, ...points], FALLBACK_KMH);
+    estimated = true;
+  }
 
   const serviceMin = req.service_min_per_stop ?? DEFAULT_SERVICE_MIN;
   const solution = solve(
@@ -314,7 +330,14 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
   }
 
   const ordered = solution.order.map((i) => candidates[i]);
-  const line = await osrmCall(osrm.route([depot, ...ordered.map((c): LngLat => [c.lng, c.lat]), depot]));
+  const routePoints: LngLat[] = [depot, ...ordered.map((c): LngLat => [c.lng, c.lat]), depot];
+  let line: LineString;
+  try {
+    line = await osrm.route(routePoints);
+  } catch {
+    line = { type: "LineString", coordinates: routePoints.map(([lng, lat]): [number, number] => [lng, lat]) };
+    estimated = true;
+  }
   const etas = buildEtas(solution.order, matrix, serviceMin, planStartIso(req.plan_date));
 
   await replaceExistingPlan(db, existing, nowIso, new Set(ordered.map((c) => c.id)));
@@ -334,7 +357,7 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
         total_km: totalKm,
         total_minutes: totalMinutes,
         baseline_km: baselineKm,
-        objective: { request: req, candidate_count: candidates.length },
+        objective: { request: req, candidate_count: candidates.length, estimated, considered_all: consideredAll },
       })
       .select("id"),
   );
