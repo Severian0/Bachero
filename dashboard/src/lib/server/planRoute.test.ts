@@ -262,6 +262,24 @@ describe("buildEtas", () => {
   it("returns an empty array for an empty order", () => {
     expect(buildEtas([], matrix, 20, "2026-09-03T08:00:00.000Z")).toEqual([]);
   });
+
+  it("a forced start stop's eta is the shift start, and its service delays every later leg", () => {
+    const start = "2026-09-03T08:00:00.000Z";
+    // Stop 1 is the forced start itself; then 20 min service + 5 min drive to A.
+    expect(buildEtas([0], matrix, 20, start, { forcedStart: true, endIndex: 0, forcedEnd: false })).toEqual([
+      "2026-09-03T08:00:00.000Z",
+      "2026-09-03T08:25:00.000Z",
+    ]);
+  });
+
+  it("a forced end stop's eta follows the final drive leg", () => {
+    const start = "2026-09-03T08:00:00.000Z";
+    // Depot -> A is 5 min; 20 min service; A -> end (index 2) is 10 min.
+    expect(buildEtas([0], matrix, 20, start, { forcedStart: false, endIndex: 2, forcedEnd: true })).toEqual([
+      "2026-09-03T08:05:00.000Z",
+      "2026-09-03T08:35:00.000Z",
+    ]);
+  });
 });
 
 // ─── fake PostgREST ───────────────────────────────────────────────────────────
@@ -718,5 +736,103 @@ describe("planRoute", () => {
     expect(tables.work_orders.map((w) => w.id)).toContain("wo-3");
     expect(tables.route_plans.map((p) => p.id)).not.toContain("plan-old");
     expect(tables.route_plans).toHaveLength(1);
+  });
+});
+
+describe("planRoute with pothole anchors", () => {
+  it("start_pothole_id becomes matrix point 0, a forced first stop, removed from the candidates", async () => {
+    const { db, tables } = makeDb(baseTables());
+    const osrm = makeOsrm();
+    const req = okOf(validatePlanRequest({
+      crew_id: CREW, plan_date: DATE, mode: "count", max_stops: 3, start_pothole_id: POTHOLE_A,
+    }));
+
+    const result = await planRoute({ db, osrm }, req);
+
+    // A replaces the depot at matrix point 0; only B remains a candidate.
+    expect(osrm.table).toHaveBeenCalledWith([
+      [-0.129, 51.496],
+      [-0.133, 51.4984],
+    ]);
+    expect(result.start).toMatchObject({ lng: -0.129, lat: 51.496 });
+    expect(result.start.label).toContain("BCH-");
+    expect(result.end).toEqual(result.start); // no end anchor: a loop at the pothole
+    expect(result.stops.map((s) => s.pothole_id)).toEqual([POTHOLE_A, POTHOLE_B]);
+    expect(result.stops.map((s) => s.stop_order)).toEqual([1, 2]);
+    // The forced stop is worked first, at the shift start itself.
+    expect(result.stops[0].eta).toBe(planStartIso(DATE));
+    // Both stops get real work orders, renumbered from 1.
+    expect(tables.work_orders).toHaveLength(2);
+    expect(tables.work_orders[0]).toMatchObject({ pothole_id: POTHOLE_A, stop_order: 1, status: "assigned" });
+    // The anchors stored on the plan match the echo.
+    expect((tables.route_plans[0].objective as { anchors: { start: { label: string } } }).anchors.start.label)
+      .toContain("BCH-");
+  });
+
+  it("end_pothole_id appends a matrix point and the route stays open", async () => {
+    const { db } = makeDb(baseTables());
+    const osrm = makeOsrm();
+    const req = okOf(validatePlanRequest({
+      crew_id: CREW, plan_date: DATE, mode: "manual", pothole_ids: [POTHOLE_A], end_pothole_id: POTHOLE_B,
+    }));
+
+    const result = await planRoute({ db, osrm }, req);
+
+    // Points: depot (start), A (candidate), B (the appended end anchor).
+    expect(osrm.table).toHaveBeenCalledWith([
+      [-0.1246, 51.4994],
+      [-0.129, 51.496],
+      [-0.133, 51.4984],
+    ]);
+    expect(result.start).toEqual({ lng: -0.1246, lat: 51.4994, label: "Depot" });
+    expect(result.end).toMatchObject({ lng: -0.133, lat: 51.4984 });
+    expect(result.stops.map((s) => s.pothole_id)).toEqual([POTHOLE_A, POTHOLE_B]);
+    // Geometry runs start -> stop -> end with no leg back to the depot.
+    expect(osrm.route).toHaveBeenCalledWith([
+      [-0.1246, 51.4994],
+      [-0.129, 51.496],
+      [-0.133, 51.4984],
+    ]);
+  });
+
+  it("a plan of only forced anchor stops still drives between them", async () => {
+    const { db } = makeDb(baseTables());
+    // Manual mode names A, which is also the start anchor, so the solver gets
+    // no free candidates at all; B is the end anchor.
+    const req = okOf(validatePlanRequest({
+      crew_id: CREW, plan_date: DATE, mode: "manual", pothole_ids: [POTHOLE_A],
+      start_pothole_id: POTHOLE_A, end_pothole_id: POTHOLE_B,
+    }));
+    const result = await planRoute({ db, osrm: makeOsrm() }, req);
+    expect(result.stops.map((s) => s.pothole_id)).toEqual([POTHOLE_A, POTHOLE_B]);
+    // Drive A -> B (20 min in MATRIX) plus two 20-minute services.
+    expect(result.total_minutes).toBe(60);
+  });
+
+  it("charges forced service time against a time budget", async () => {
+    const { db } = makeDb(baseTables());
+    const req = okOf(validatePlanRequest({
+      crew_id: CREW, plan_date: DATE, mode: "time", time_budget_min: 60, start_pothole_id: POTHOLE_A,
+    }));
+    const result = await planRoute({ db, osrm: makeOsrm() }, req);
+    expect(result.stops[0].pothole_id).toBe(POTHOLE_A);
+    expect(result.total_minutes).toBeLessThanOrEqual(60);
+  });
+
+  it("400s when an anchor pothole is not in the repair queue", async () => {
+    const { db } = makeDb(baseTables());
+    const missing = "33333333-3333-3333-3333-333333333333";
+    const start = okOf(validatePlanRequest({
+      crew_id: CREW, plan_date: DATE, mode: "count", max_stops: 1, start_pothole_id: missing,
+    }));
+    await expect(planRoute({ db, osrm: makeOsrm() }, start)).rejects.toMatchObject({
+      status: 400, message: "That start pothole is not in the repair queue.",
+    });
+    const end = okOf(validatePlanRequest({
+      crew_id: CREW, plan_date: DATE, mode: "count", max_stops: 1, end_pothole_id: missing,
+    }));
+    await expect(planRoute({ db, osrm: makeOsrm() }, end)).rejects.toMatchObject({
+      status: 400, message: "That end pothole is not in the repair queue.",
+    });
   });
 });

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LineString, OsrmClient } from "./osrm";
 import { parsePointWkb } from "./wkb";
 import { renderSteps } from "./instructions";
+import { potholeRef } from "@/lib/data/types";
 import { pointInPolygon } from "@/lib/console/area";
 import { solve } from "@/lib/solver/heuristic";
 import { buildMatrix } from "@/lib/solver/haversine";
@@ -161,16 +162,40 @@ export function planStartIso(
   return new Date(shiftStartMs(planDate, SHIFT_START_HOUR, timeZone)).toISOString();
 }
 
+export interface EtaLayout {
+  /** Matrix index 0 is itself a stop (a forced start pothole). */
+  forcedStart: boolean;
+  /** Matrix index the route finishes at; 0 keeps the loop. */
+  endIndex: number;
+  /** That finishing index is itself a stop (a forced end pothole). */
+  forcedEnd: boolean;
+}
+
 /**
- * ETA per stop: cumulative drive minutes from the depot (matrix index 0), with
- * `serviceMin` added after each stop. `order` holds candidate indices, so the
- * matrix index of candidate i is i + 1.
+ * ETA per stop: cumulative drive minutes from matrix index 0, with `serviceMin`
+ * added after each stop. `order` holds candidate indices, so the matrix index of
+ * candidate i is i + 1. A forced anchor pothole is a stop the solver never saw,
+ * so the layout adds it at the front or the back by hand.
  */
-export function buildEtas(order: number[], matrix: Matrix, serviceMin: number, startIso: string): string[] {
+export function buildEtas(
+  order: number[],
+  matrix: Matrix,
+  serviceMin: number,
+  startIso: string,
+  layout?: EtaLayout,
+): string[] {
   const startMs = new Date(startIso).getTime();
   const etas: string[] = [];
   let minutes = 0;
   let from = 0;
+
+  // The crew starts the shift standing at the forced start pothole, so its eta is
+  // the shift start itself and its service time delays every later leg.
+  if (layout?.forcedStart) {
+    etas.push(new Date(startMs).toISOString());
+    minutes += serviceMin;
+  }
+
   for (const candidate of order) {
     const node = candidate + 1;
     minutes += matrix.durationMin[from][node];
@@ -178,6 +203,12 @@ export function buildEtas(order: number[], matrix: Matrix, serviceMin: number, s
     minutes += serviceMin;
     from = node;
   }
+
+  if (layout?.forcedEnd) {
+    minutes += matrix.durationMin[from][layout.endIndex];
+    etas.push(new Date(startMs + minutes * 60_000).toISOString());
+  }
+
   return etas;
 }
 
@@ -294,6 +325,27 @@ async function replaceExistingPlan(
   rows(await db.from("route_plans").delete().in("id", planIds));
 }
 
+/** "BCH-1A2B - Millbank", the reference an operator can read down a phone. */
+function anchorLabel(row: PotholeMapRow): string {
+  return `${potholeRef(row.id)} - ${row.road_name ?? "Unnamed road"}`;
+}
+
+/**
+ * An anchor pothole must be one the crew could actually be sent to, so it is
+ * looked up in the merged queue rather than the filtered candidate list: manual
+ * mode may not have named it, and a replan may still be holding it.
+ */
+function anchorPothole(
+  queue: PotholeMapRow[],
+  id: string | undefined,
+  which: "start" | "end",
+): PotholeMapRow | null {
+  if (id === undefined) return null;
+  const row = queue.find((p) => p.id === id);
+  if (!row) throw new PlanRouteError(400, `That ${which} pothole is not in the repair queue.`);
+  return row;
+}
+
 /** docs/ARCHITECTURE.md §5 — plan a crew's day and persist it as a draft. */
 export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Promise<PlanRouteResponse> {
   const { db, osrm } = deps;
@@ -312,42 +364,80 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
     throw new PlanRouteError(500, "The crew depot could not be read.");
   }
 
-  const startAnchor: ResolvedAnchor = { lng: depot[0], lat: depot[1], label: "Depot" };
-  const endAnchor: ResolvedAnchor = startAnchor;
-
   const existing = await loadExistingPlan(db, req);
   const queue = await loadQueue(db, existing);
-  let candidates = pickCandidates(queue, req);
-  if (candidates.length === 0) throw new PlanRouteError(400, "No open potholes match that request.");
+
+  const startPothole = anchorPothole(queue, req.start_pothole_id, "start");
+  const endPothole = anchorPothole(queue, req.end_pothole_id, "end");
+
+  const startPoint: LngLat = startPothole ? [startPothole.lng, startPothole.lat] : depot;
+  const startAnchor: ResolvedAnchor = startPothole
+    ? { lng: startPothole.lng, lat: startPothole.lat, label: anchorLabel(startPothole) }
+    : { lng: depot[0], lat: depot[1], label: "Depot" };
+
+  // validatePlanRequest already normalised "end equals start" to a loop, so an end
+  // pothole here is genuinely a different place.
+  const endPoint: LngLat = endPothole ? [endPothole.lng, endPothole.lat] : startPoint;
+  const endAnchor: ResolvedAnchor = endPothole
+    ? { lng: endPothole.lng, lat: endPothole.lat, label: anchorLabel(endPothole) }
+    : startAnchor;
+
+  const anchorIds = new Set(
+    [startPothole?.id, endPothole?.id].filter((id): id is string => id !== undefined),
+  );
+  const forcedCount = anchorIds.size;
+
+  let candidates = pickCandidates(queue, req).filter((c) => !anchorIds.has(c.id));
+  // Only an error when there is nothing at all to visit. Two anchor potholes and no
+  // free candidates is a legitimate plan: drive from one to the other.
+  if (candidates.length === 0 && forcedCount === 0) {
+    throw new PlanRouteError(400, "No open potholes match that request.");
+  }
   // The queue is priority-ordered, so clipping keeps the most valuable stops.
   const consideredAll = candidates.length <= MAX_CANDIDATES;
   if (!consideredAll) candidates = candidates.slice(0, MAX_CANDIDATES);
 
-  const points: LngLat[] = candidates.map((c) => [c.lng, c.lat]);
+  const points: LngLat[] = [
+    startPoint,
+    ...candidates.map((c): LngLat => [c.lng, c.lat]),
+    ...(endPothole ? [endPoint] : []),
+  ];
+  // Candidate i keeps matrix index i + 1, so a closed route is byte-for-byte the
+  // behaviour before anchors existed.
+  const endIndex = endPothole ? candidates.length + 1 : 0;
+
   // A dead routing service downgrades the numbers rather than killing the plan.
   // The matrix only ranks candidate orderings; nobody reads it. `estimated` is
   // recorded on the plan so the console can label figures it cannot stand behind.
   let estimated = false;
   let matrix: Matrix;
   try {
-    matrix = await osrm.table([depot, ...points]);
+    matrix = await osrm.table(points);
   } catch {
-    matrix = buildMatrix([depot, ...points], FALLBACK_KMH);
+    matrix = buildMatrix(points, FALLBACK_KMH);
     estimated = true;
   }
 
   const serviceMin = req.service_min_per_stop ?? DEFAULT_SERVICE_MIN;
+  // tourMin only charges service for stops the solver chose, so the forced ones are
+  // taken off the budget before it is handed over.
+  const solverBudget =
+    req.time_budget_min === undefined
+      ? undefined
+      : req.time_budget_min - serviceMin * forcedCount;
+
   const solution = solve(
     candidates.map((c) => ({ id: c.id, priority: c.priority })),
     matrix,
     {
       mode: req.mode,
       maxStops: req.max_stops,
-      timeBudgetMin: req.time_budget_min,
+      timeBudgetMin: solverBudget,
       serviceMin,
+      endIndex,
     },
   );
-  if (solution.order.length === 0) {
+  if (solution.order.length === 0 && forcedCount === 0) {
     throw new PlanRouteError(400, "No route could be planned for those stops.");
   }
 
@@ -358,25 +448,49 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
     throw new PlanRouteError(400, "Some of those potholes cannot be reached by road.");
   }
 
-  const ordered = solution.order.map((i) => candidates[i]);
-  const routePoints: LngLat[] = [depot, ...ordered.map((c): LngLat => [c.lng, c.lat]), depot];
+  const solverStops = solution.order.map((i) => candidates[i]);
+  const ordered: PotholeMapRow[] = [
+    ...(startPothole ? [startPothole] : []),
+    ...solverStops,
+    ...(endPothole ? [endPothole] : []),
+  ];
+
+  // With no solver stops the tour helpers return zero, so the one leg that still
+  // has to be driven - start anchor straight to end anchor - is added by hand.
+  const directMin = solution.order.length === 0 ? matrix.durationMin[0][endIndex] : 0;
+  const directKm = solution.order.length === 0 ? matrix.distanceKm[0][endIndex] : 0;
+
+  const routePoints: LngLat[] = [
+    startPoint,
+    ...solverStops.map((c): LngLat => [c.lng, c.lat]),
+    endPoint,
+  ];
   let line: LineString;
-  let steps: RouteStep[] = [];
+  let steps: RouteStep[];
   try {
     const routed = await osrm.route(routePoints);
     line = routed.geometry;
     steps = renderSteps(routed.steps);
   } catch {
-    line = { type: "LineString", coordinates: routePoints.map(([lng, lat]): [number, number] => [lng, lat]) };
+    line = {
+      type: "LineString",
+      coordinates: routePoints.map(([lng, lat]): [number, number] => [lng, lat]),
+    };
+    steps = [];
     estimated = true;
   }
-  const etas = buildEtas(solution.order, matrix, serviceMin, planStartIso(req.plan_date));
+
+  const etas = buildEtas(solution.order, matrix, serviceMin, planStartIso(req.plan_date), {
+    forcedStart: startPothole !== null,
+    endIndex,
+    forcedEnd: endPothole !== null,
+  });
 
   await replaceExistingPlan(db, existing, nowIso, new Set(ordered.map((c) => c.id)));
 
-  const totalKm = round1(solution.totalKm);
-  const totalMinutes = Math.round(solution.totalMin);
-  const baselineKm = round1(solution.baselineKm);
+  const totalKm = round1(solution.totalKm + directKm);
+  const totalMinutes = Math.round(solution.totalMin + directMin + serviceMin * forcedCount);
+  const baselineKm = round1(solution.baselineKm + directKm);
 
   const inserted = rows<{ id: string }>(
     await db
