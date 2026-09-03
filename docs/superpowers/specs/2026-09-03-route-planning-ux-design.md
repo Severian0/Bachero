@@ -212,16 +212,30 @@ export interface PlanRouteRequest {
   end_pothole_id?: string;     // omit for "same as start"
 }
 
+export interface RouteStep {
+  instruction: string;   // "Turn left onto Millbank"
+  lng: number;
+  lat: number;
+  distance_m: number;
+}
+
 export interface PlanRouteResponse {
   // …existing fields unchanged…
   start: { lng: number; lat: number; label: string };
   end: { lng: number; lat: number; label: string };
+  steps: RouteStep[];    // empty when the OSRM route call fell back to a straight line
 }
 ```
 
 There is no coordinate anywhere in the request. The client names a pothole by id or stays
 silent (the depot; a loop); the server resolves both anchors to coordinates (§3) and
 echoes them, labelled ("Depot", or the pothole's "ref - street"), in the response.
+
+`steps` is in the response as well as in `objective` because the console's Preview drive
+(§6) plays a proposal that has not been fetched back from the database - the plan is in
+the store, not on a crew's phone yet. The crew page reads the same array from
+`objective.steps` on the saved plan. One shape, two sources, so `usePlayback.ts` takes it
+as a plain argument and neither screen re-derives it.
 
 - **Existing callers do not break.** Both request fields are optional and their absence
   reproduces today's behaviour exactly (depot loop), so the synthetic data source, the
@@ -324,6 +338,18 @@ summary line gains "first stop 15.6 km away" so the total is explainable, and th
 fits the whole route including the start. §13 records the design-level consequence of
 that distance.
 
+### Preview drive on the console
+
+Once a plan comes back, the sheet's summary gains a "Preview drive" button beside the
+totals. It plays the proposed route on the console map: vehicle marker, countdown, and the
+next instruction, using the same `usePlayback.ts` and `along.ts` as the crew page (§9). No
+follow mode, no stop cards - the dispatcher is reading a proposal, not driving it.
+
+The plan is not yet saved to a crew's phone at this point, so the preview reads the
+`PlanRouteResponse` already in the store: `path`, `total_km`, `total_minutes`, and the
+steps echoed back with it. Dispatching, discarding or replanning stops the playback, and
+`prefers-reduced-motion` gets the same stepped-highlight treatment as the crew page.
+
 ## 7. Crew page (driver) UI
 
 `/route/:id` goes from stub to the driver view. Mobile-first, tokens only, no login, and
@@ -418,8 +444,24 @@ Arrowheads along the route line, pointing the direction of travel, on both scree
 
 ## 9. Animation
 
-A "Preview drive" button on the crew page plays the route: a vehicle marker moves along
-the path, the header counts down, and the instruction banner changes as turns pass.
+A "Preview drive" button plays the route: a vehicle marker moves along the path, the
+header counts down, and the instruction banner changes as turns pass.
+
+**It runs on both screens.** On the crew page it previews the drive ahead. On the console
+it plays the proposed route inside the dispatch sheet, before the operator commits, which
+is the owner's decision and reverses the earlier draft's "crew page only". The reasoning:
+the planning beat otherwise ends on a static line and a percentage, and that percentage is
+structurally weak while the depot sits far from the worked area (§13). Motion carries the
+moment the number cannot. The cost is small because both screens mount the same
+`usePlayback.ts` and `along.ts` against the same shape of data - the console holds a
+`PlanRouteResponse`, the crew page a `route_plans_map` row, and both expose
+`path_geojson`-shaped coordinates, `total_km`, `total_minutes` and `objective.steps`. The
+playback hook therefore takes that data as plain arguments and knows nothing about either
+screen's store.
+
+On the console the preview is deliberately smaller: marker, countdown and instruction
+banner on the existing map, no follow mode and no stop cards. Dispatching, discarding or
+replanning stops it.
 
 **It is theatrical, and that is the design.** The geometry, the stop order, the ETAs and
 the turn instructions are all real data from the plan; only the clock is compressed. A
@@ -517,6 +559,9 @@ be genuinely skippable without leaving stubs visible on stage.
    and the nearest-pothole-to-the-depot helper is client-side (§6). Purely console work.
 4. **Preview drive animation** with countdown and changing instructions. Needs
    `steps=true` and `objective.steps` from §9, plus `along.ts` / `usePlayback.ts`.
+   Crew page first, then the console preview - the second is a second mount of the same
+   hook, so it is minutes rather than hours, and it is what gives the planning beat
+   motion.
 5. **Crew-page geolocation follow mode.** Real position dot, heading, re-centre.
 
 **- cut line -** everything above is what the 2-minute pitch can show.
@@ -558,10 +603,15 @@ would see.
 - **Venue geolocation** may be poor indoors (wifi positioning, tens of metres of error).
   Only the crew page's follow mode is exposed - the console never reads a position - and
   it might jitter; the 2 km far-from-route guard keeps it from thrashing the camera.
-- **Open question:** should Preview drive exist on the console too (playing on the
-  planned route before dispatch)? It is nearly free once `usePlayback.ts` exists, and
-  the pitch's planning beat might land harder with motion. Left out of scope until the
-  crew-page version proves the effect.
-- **Open question:** whether the crew page should subscribe to Realtime so a replan
-  mid-shift updates the driver's list. Deliberately out: the demo never replans a
-  dispatched route, and a page reload covers the edge.
+**Both of the earlier open questions are now decided by the owner.**
+
+- **Preview drive runs on the console as well as the crew page.** Decided yes (§9). The
+  planning beat otherwise ends on a static line and a percentage that the depot problem
+  holds near 1 percent, so the moment needs something the number cannot give it. The
+  second mount is cheap because the playback hook takes plain data, not a store.
+- **The crew page does not subscribe to Realtime.** Decided no. A replan while a crew is
+  out would rewrite the driver's list under their thumb - the stop they are standing at
+  could renumber or vanish - and handling that honestly means locking the in-progress
+  stop, confirming the change and defining what "in progress" means when the plan moved.
+  That is a design problem of its own for an edge the demo never reaches, and a page
+  reload already covers it. Worth naming on a "what next" slide if a judge asks.
