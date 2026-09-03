@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import Map, { Layer, Marker, Source } from "react-map-gl/maplibre";
 import type { MapRef } from "react-map-gl/maplibre";
 import { setWorkerUrl } from "maplibre-gl";
@@ -13,6 +13,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import { buildMapStyle } from "@/lib/map/style";
 import { MAP_FALLBACK, readMapTokens, readToken } from "@/lib/map/tokens";
+import { buildArrowImage } from "@/lib/map/arrow";
 import type { CrewPlan } from "@/lib/crew/plan";
 
 /**
@@ -34,6 +35,7 @@ export function DriveMap({
   const style = useMemo(() => buildMapStyle(readMapTokens()), []);
   const committed = useMemo(() => readToken("--committed", MAP_FALLBACK.committed), []);
   const mapRef = useRef<MapRef>(null);
+  const [arrowReady, setArrowReady] = useState(false);
 
   const data = useMemo<GeoJSON.FeatureCollection>(
     () => ({
@@ -79,7 +81,14 @@ export function DriveMap({
         dragRotate={false}
         pitchWithRotate={false}
         attributionControl={{ compact: true }}
-        onLoad={fitRoute}
+        onLoad={() => {
+          const m = mapRef.current?.getMap();
+          if (m && !m.hasImage("route-arrow-committed")) {
+            m.addImage("route-arrow-committed", buildArrowImage(committed));
+          }
+          setArrowReady(true);
+          fitRoute();
+        }}
         onDragStart={onUserPan}
       >
         <Source id="crew-route" type="geojson" data={data}>
@@ -89,6 +98,21 @@ export function DriveMap({
             layout={{ "line-cap": "round", "line-join": "round" }}
             paint={{ "line-color": committed, "line-width": 3 }}
           />
+          {arrowReady && (
+            <Layer
+              id="crew-route-arrows"
+              type="symbol"
+              layout={{
+                "symbol-placement": "line",
+                "symbol-spacing": 80,
+                "icon-image": "route-arrow-committed",
+                "icon-size": 0.5,
+                "icon-rotation-alignment": "map",
+                "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
+              }}
+            />
+          )}
         </Source>
         <Marker longitude={plan.start.lng} latitude={plan.start.lat} anchor="center" style={{ zIndex: 30 }}>
           {anchorSquare(plan.start.label)}
