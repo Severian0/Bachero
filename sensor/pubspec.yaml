@@ -1,0 +1,54 @@
+name: bachero_sensor
+description: >-
+  Bachero sensor app. A phone mounted in a council fleet vehicle watches the road
+  through the camera and feels it through the accelerometer, and writes detections
+  straight to Supabase. Spec: docs/ARCHITECTURE.md §3.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Road-facing camera and the frame stream the vision detector runs on.
+  camera: ^0.12.0
+  # Raw accelerometer (gravity included; we estimate and remove it ourselves).
+  sensors_plus: ^6.0.1
+  # Position, speed, heading and GPS accuracy for every detection and breadcrumb.
+  geolocator: ^13.0.1
+  # PostgREST and Storage are plain HTTP; no Supabase SDK needed for this app.
+  http: ^1.2.2
+  # Detection ids are generated on the phone so the photo path matches the row.
+  uuid: ^4.5.1
+  # JPEG encoding of the detection frame, off the UI isolate.
+  image: ^4.3.0
+  # Settings that must survive a restart mid-demo.
+  shared_preferences: ^2.3.2
+  # A dash-mounted phone must not sleep while it is recording.
+  wakelock_plus: ^1.2.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Inter, per docs/design/DESIGN.md §0 (the mockup's override of the Industry base).
+  # Bundled rather than fetched so the app types correctly with no signal.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
