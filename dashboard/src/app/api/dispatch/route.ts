@@ -1,11 +1,15 @@
 import { DispatchError, createResendMailer, dispatch, validateDispatchRequest } from "@/lib/server/dispatch";
 import { serverClient } from "@/lib/server/supabase";
+import { contractorBaseUrl } from "@/lib/links";
 
 const DEFAULT_FROM = "onboarding@resend.dev";
-const DEFAULT_APP_URL = "http://localhost:3000";
 
-// POST /api/dispatch — docs/ARCHITECTURE.md §5. All of the work is in
+// POST /api/dispatch - docs/ARCHITECTURE.md section 5. All of the work is in
 // src/lib/server/dispatch.ts; this only parses, injects I/O and maps errors.
+//
+// The crew link is built from the contractor portal's base URL, not this
+// dashboard's: the crew screens live in `contractor/`, and the dashboard's
+// /route/{id} is only a redirect kept alive for older bookmarks and emails.
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -27,7 +31,7 @@ export async function POST(request: Request) {
       {
         db: serverClient(),
         mailer: apiKey ? createResendMailer(apiKey) : null,
-        appUrl: process.env.NEXT_PUBLIC_APP_URL ?? DEFAULT_APP_URL,
+        appUrl: contractorBaseUrl(),
         from: process.env.DISPATCH_FROM_EMAIL ?? DEFAULT_FROM,
       },
       parsed,
