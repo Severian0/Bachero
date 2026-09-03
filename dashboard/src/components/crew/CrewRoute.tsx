@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Marker } from "react-map-gl/maplibre";
+import { Marker, useMap } from "react-map-gl/maplibre";
 import { buildTrack } from "@/lib/crew/along";
+import { bearingDeg, minDistanceKm } from "@/lib/crew/geo";
+import { haversineKm } from "@/lib/solver/haversine";
 import { usePlayback } from "./usePlayback";
 import type { CrewPlan } from "@/lib/crew/plan";
 import type { WorkOrderStatus } from "@/lib/types";
@@ -11,6 +13,9 @@ import { km, minutes } from "@/lib/console/format";
 import { StopList } from "./StopList";
 import { DriveMap } from "./DriveMap";
 import { StopCard } from "./StopCard";
+
+/** Where the follow mode is: off, live, paused by a pan, denied, or too far. */
+type Follow = "off" | "on" | "paused" | "denied" | "far";
 
 /**
  * The driver's screen. Mobile-first: header, map (Task 3), then a bottom
@@ -58,6 +63,53 @@ export default function CrewRoute({ plan }: { plan: CrewPlan }) {
     ? `Next stop: ${nextUndone.road_name ?? `${nextUndone.lat.toFixed(4)}, ${nextUndone.lng.toFixed(4)}`}`
     : "All stops done";
 
+  const [follow, setFollow] = useState<Follow>("off");
+  const [fix, setFix] = useState<{ lng: number; lat: number; headingDeg: number | null } | null>(null);
+  const [farKm, setFarKm] = useState<number | null>(null);
+  const watchId = useRef<number | null>(null);
+  const lastFix = useRef<[number, number] | null>(null);
+
+  const stopWatch = () => {
+    if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+    watchId.current = null;
+  };
+  useEffect(() => stopWatch, []);
+
+  const startFollow = () => {
+    // Requested only on the tap, never on load: a permission prompt on open
+    // would fire during the pitch's screen-share at the worst moment.
+    if (!("geolocation" in navigator)) {
+      setFollow("denied");
+      return;
+    }
+    watchId.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const here: [number, number] = [pos.coords.longitude, pos.coords.latitude];
+        const away = minDistanceKm(here, plan.path);
+        const heading =
+          typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading)
+            ? pos.coords.heading
+            : lastFix.current
+              ? bearingDeg(lastFix.current, here)
+              : null;
+        lastFix.current = here;
+        setFix({ lng: here[0], lat: here[1], headingDeg: heading });
+        if (away > 2) {
+          setFarKm(haversineKm(here, [plan.stops[0].lng, plan.stops[0].lat]));
+          setFollow("far");
+        } else {
+          setFarKm(null);
+          setFollow((f) => (f === "paused" ? "paused" : "on"));
+        }
+      },
+      () => {
+        stopWatch();
+        setFollow("denied");
+      },
+      { enableHighAccuracy: true },
+    );
+  };
+
   const totals = [
     `${plan.stops.length} ${plan.stops.length === 1 ? "stop" : "stops"}`,
     ...(plan.total_km === null ? [] : [km(plan.total_km)]),
@@ -81,9 +133,29 @@ export default function CrewRoute({ plan }: { plan: CrewPlan }) {
             ? stepping ? "Stop preview" : "Preview drive"
             : playback.playing ? "Pause preview" : playback.km > 0 ? "Replay preview" : "Preview drive"}
         </button>
+        {follow === "off" || follow === "denied" ? (
+          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: "var(--s2)", marginLeft: "var(--s2)" }} onClick={startFollow}>
+            Follow my position
+          </button>
+        ) : follow === "paused" ? (
+          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: "var(--s2)", marginLeft: "var(--s2)" }} onClick={() => setFollow("on")}>
+            Re-centre
+          </button>
+        ) : null}
+        {follow === "denied" && (
+          <p className="secondary" style={{ margin: "var(--s1) 0 0", fontSize: "var(--t-small)" }}>
+            Location is off. Stops are shown in driving order.
+          </p>
+        )}
+        {follow === "far" && farKm !== null && (
+          <p className="secondary" style={{ margin: "var(--s1) 0 0", fontSize: "var(--t-small)" }}>
+            You are <span className="data">{farKm.toFixed(1)} km</span> from the first stop. Use the stop&apos;s Google Maps link for the first leg.
+          </p>
+        )}
       </header>
       <DriveMap
         plan={plan}
+        onUserPan={() => setFollow((f) => (f === "on" ? "paused" : f))}
         overlay={
           !reducedMotion && previewActive ? (
             <div
@@ -116,6 +188,27 @@ export default function CrewRoute({ plan }: { plan: CrewPlan }) {
             />
           </Marker>
         )}
+        {fix && follow !== "denied" && (
+          <Marker longitude={fix.lng} latitude={fix.lat} anchor="center" style={{ zIndex: 65 }}>
+            <div style={{ position: "relative", width: 16, height: 16 }} aria-label="Your position">
+              {fix.headingDeg !== null && (
+                <svg
+                  width="16" height="16" viewBox="0 0 16 16" aria-hidden
+                  style={{ position: "absolute", inset: 0, transform: `rotate(${fix.headingDeg}deg)` }}
+                >
+                  <path d="M8 0 L11 6 L5 6 Z" fill="var(--action)" />
+                </svg>
+              )}
+              <div
+                style={{
+                  position: "absolute", inset: 3, borderRadius: "var(--r-full)",
+                  background: "var(--action)", border: "2px solid var(--surface)",
+                }}
+              />
+            </div>
+          </Marker>
+        )}
+        <FollowCamera target={follow === "on" && fix ? [fix.lng, fix.lat] : null} />
       </DriveMap>
       <section
         style={{
@@ -144,4 +237,13 @@ export default function CrewRoute({ plan }: { plan: CrewPlan }) {
       </section>
     </main>
   );
+}
+
+/** Keeps the camera on the driver while follow is live. */
+function FollowCamera({ target }: { target: [number, number] | null }) {
+  const { current: map } = useMap();
+  useEffect(() => {
+    if (map && target) map.panTo(target, { duration: 500 });
+  }, [map, target]);
+  return null;
 }
