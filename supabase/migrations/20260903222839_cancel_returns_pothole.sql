@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Bachero — a cancelled work order returns its pothole to the queue
 --
--- Path:  supabase/migrations/20260903000000_cancel_returns_pothole.sql
+-- Path:  supabase/migrations/20260903222839_cancel_returns_pothole.sql
 -- Apply: `supabase db push`, or paste this file into the SQL editor.
 --
 -- Until it is applied, the contractor app's "Cannot repair — escalate" action

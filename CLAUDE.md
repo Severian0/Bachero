@@ -36,7 +36,7 @@ supabase db push                    # apply migrations to the linked project
 supabase db reset                   # local: drop + reapply (includes the seed block)
 ```
 
-Env: copy `dashboard/.env.example` to `dashboard/.env.local`. `NEXT_PUBLIC_SUPABASE_*` are used by the browser client in `src/lib/supabase.ts`; `RESEND_API_KEY` (optional), `DISPATCH_FROM_EMAIL` (default `onboarding@resend.dev`) and `OSRM_BASE_URL` (default `https://router.project-osrm.org`) are server-only. `NEXT_PUBLIC_APP_URL` (default `http://localhost:3000`) is the base the dispatch email uses for its `/route/{id}` crew page link, so it has to be reachable by the crew's phone.
+Env: copy `dashboard/.env.example` to `dashboard/.env.local`. `NEXT_PUBLIC_SUPABASE_*` are used by the browser client in `src/lib/supabase.ts`; `RESEND_API_KEY` (optional), `DISPATCH_FROM_EMAIL` (default `onboarding@resend.dev`) and `OSRM_BASE_URL` (default `https://router.project-osrm.org`) are server-only. `NEXT_PUBLIC_CONTRACTOR_URL` (default `http://localhost:3001`) is the contractor portal's base URL, which is where the crew screens now live: both the dispatch email's crew link and this app's `/route/{id}` redirect are built from it by `src/lib/links.ts`, so it has to be reachable by the crew's phone. `NEXT_PUBLIC_APP_URL` is no longer read by anything.
 
 ## Next.js 16 note
 
