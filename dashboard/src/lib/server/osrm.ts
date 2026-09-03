@@ -7,7 +7,7 @@ export interface LineString {
 
 export interface OsrmClient {
   table(points: LngLat[]): Promise<Matrix>;
-  route(points: LngLat[]): Promise<LineString>;
+  route(points: LngLat[]): Promise<OsrmRoute>;
 }
 
 interface OsrmTableResponse {
@@ -23,9 +23,37 @@ function toCostOrInfinity(value: number | null, unit: number): number {
   return value === null || !Number.isFinite(value) ? Infinity : value / unit;
 }
 
+export interface OsrmManoeuvre {
+  type: string;               // "turn", "depart", "arrive", "roundabout", and so on
+  modifier?: string;          // "left", "right", "slight left", "straight", "uturn"
+  exit?: number;              // roundabout exit count
+  location: [number, number]; // [lng, lat]
+}
+
+export interface OsrmStep {
+  name: string;               // road name; "" when OSRM has none
+  distance: number;           // metres driven in this step
+  maneuver: OsrmManoeuvre;
+}
+
+/** What planRoute consumes: the drawn line plus the manoeuvres along it. */
+export interface OsrmRoute {
+  geometry: LineString;
+  steps: OsrmStep[];
+}
+
 interface OsrmRouteResponse {
   code: string;
-  routes?: { geometry: LineString }[];
+  routes?: {
+    geometry: LineString;
+    legs?: {
+      steps?: {
+        name?: string;
+        distance?: number;
+        maneuver?: { type?: string; modifier?: string; exit?: number; location?: [number, number] };
+      }[];
+    }[];
+  }[];
 }
 
 function formatCoords(points: LngLat[]): string {
@@ -58,14 +86,32 @@ export function createOsrmClient(baseUrl: string, fetchImpl: typeof fetch = fetc
       return { durationMin, distanceKm };
     },
 
-    async route(points: LngLat[]): Promise<LineString> {
-      const url = `${baseUrl}/route/v1/driving/${formatCoords(points)}?overview=full&geometries=geojson`;
+    async route(points: LngLat[]): Promise<OsrmRoute> {
+      const url = `${baseUrl}/route/v1/driving/${formatCoords(points)}?overview=full&geometries=geojson&steps=true`;
       const body = (await fetchJson(fetchImpl, url)) as OsrmRouteResponse;
-      const geometry = body.routes?.[0]?.geometry;
-      if (body.code !== "Ok" || !geometry) {
+      const first = body.routes?.[0];
+      if (body.code !== "Ok" || !first?.geometry) {
         throw new Error("Route service unavailable");
       }
-      return geometry;
+      // One route, several legs (one per waypoint pair); the banner wants a
+      // single ordered list, so the legs are flattened here, once.
+      const steps: OsrmStep[] = (first.legs ?? []).flatMap((leg) =>
+        (leg.steps ?? []).flatMap((s) => {
+          const location = s.maneuver?.location;
+          if (!location) return [];
+          return [{
+            name: s.name ?? "",
+            distance: s.distance ?? 0,
+            maneuver: {
+              type: s.maneuver?.type ?? "turn",
+              modifier: s.maneuver?.modifier,
+              exit: s.maneuver?.exit,
+              location,
+            },
+          }];
+        }),
+      );
+      return { geometry: first.geometry, steps };
     },
   };
 }

@@ -333,7 +333,7 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
   const routePoints: LngLat[] = [depot, ...ordered.map((c): LngLat => [c.lng, c.lat]), depot];
   let line: LineString;
   try {
-    line = await osrm.route(routePoints);
+    line = (await osrm.route(routePoints)).geometry;
   } catch {
     line = { type: "LineString", coordinates: routePoints.map(([lng, lat]): [number, number] => [lng, lat]) };
     estimated = true;

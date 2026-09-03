@@ -7,7 +7,7 @@ import {
   planStartIso,
   planRoute,
 } from "./planRoute";
-import type { OsrmClient, LineString } from "./osrm";
+import type { OsrmClient, OsrmRoute, LineString } from "./osrm";
 import type { LngLat, Matrix } from "@/lib/solver/haversine";
 import type { PlanRouteRequest, PotholeMapRow } from "@/lib/types";
 
@@ -368,7 +368,7 @@ const LINE: LineString = {
 function makeOsrm(over: Partial<OsrmClient> = {}) {
   return {
     table: vi.fn<(points: LngLat[]) => Promise<Matrix>>().mockResolvedValue(MATRIX),
-    route: vi.fn<(points: LngLat[]) => Promise<LineString>>().mockResolvedValue(LINE),
+    route: vi.fn<(points: LngLat[]) => Promise<OsrmRoute>>().mockResolvedValue({ geometry: LINE, steps: [] }),
     ...over,
   };
 }
@@ -532,7 +532,7 @@ describe("planRoute", () => {
     const { db, tables } = makeDb(baseTables());
     const osrm = makeOsrm({
       route: vi
-        .fn<(points: LngLat[]) => Promise<LineString>>()
+        .fn<(points: LngLat[]) => Promise<OsrmRoute>>()
         .mockRejectedValue(new Error("Route service unavailable")),
     });
     const plan = await planRoute({ db, osrm }, COUNT_REQ);

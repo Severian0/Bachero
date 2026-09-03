@@ -104,7 +104,7 @@ describe("createOsrmClient.table", () => {
 });
 
 describe("createOsrmClient.route", () => {
-  it("requests the exact URL and returns the first route's geometry", async () => {
+  it("requests steps=true and returns geometry plus flattened steps", async () => {
     const points: LngLat[] = [
       [-0.1246, 51.4994],
       [-0.13, 51.5],
@@ -117,16 +117,48 @@ describe("createOsrmClient.route", () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         code: "Ok",
-        routes: [{ geometry: { type: "LineString", coordinates } }],
+        routes: [{
+          geometry: { type: "LineString", coordinates },
+          legs: [
+            { steps: [
+              { name: "Millbank", distance: 240.4, maneuver: { type: "depart", location: [-0.1246, 51.4994] } },
+              { name: "Horseferry Road", distance: 120.2, maneuver: { type: "turn", modifier: "left", location: [-0.128, 51.4997] } },
+            ] },
+            { steps: [
+              { name: "", distance: 0, maneuver: { type: "arrive", location: [-0.13, 51.5] } },
+            ] },
+          ],
+        }],
       }),
     );
     const client = createOsrmClient(BASE_URL, fetchImpl);
-    const geometry = await client.route(points);
+    const route = await client.route(points);
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      `${BASE_URL}/route/v1/driving/-0.124600,51.499400;-0.130000,51.500000?overview=full&geometries=geojson`,
+      `${BASE_URL}/route/v1/driving/-0.124600,51.499400;-0.130000,51.500000?overview=full&geometries=geojson&steps=true`,
     );
-    expect(geometry).toEqual({ type: "LineString", coordinates });
+    expect(route.geometry).toEqual({ type: "LineString", coordinates });
+    // Steps flatten across legs, in order.
+    expect(route.steps.map((s) => s.maneuver.type)).toEqual(["depart", "turn", "arrive"]);
+    expect(route.steps[1]).toEqual({
+      name: "Horseferry Road",
+      distance: 120.2,
+      maneuver: { type: "turn", modifier: "left", exit: undefined, location: [-0.128, 51.4997] },
+    });
+  });
+
+  it("returns an empty step list when the response carries no legs or steps", async () => {
+    const coordinates = [
+      [-0.1246, 51.4994],
+      [-0.13, 51.5],
+    ];
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({ code: "Ok", routes: [{ geometry: { type: "LineString", coordinates } }] }),
+    );
+    const client = createOsrmClient(BASE_URL, fetchImpl);
+    const route = await client.route([[0, 0], [1, 1]]);
+    expect(route.geometry.coordinates).toEqual(coordinates);
+    expect(route.steps).toEqual([]);
   });
 
   it("throws Route service unavailable when code is not Ok", async () => {
