@@ -143,6 +143,10 @@ export interface PlanRouteResponse {
   path: { type: "LineString"; coordinates: [number, number][] };
   /** Turn instructions along `path`; empty when the route fell back to a straight line. */
   steps: RouteStep[];
+  /** Where the route starts, resolved server-side (spec §5). */
+  start: ResolvedAnchor;
+  /** Where it ends; equals `start` on a closed loop. */
+  end: ResolvedAnchor;
 }
 
 export interface DispatchRequest {

@@ -90,6 +90,8 @@ describe("planCandidates", () => {
     })),
     total_km: 1, total_minutes: 2, baseline_km: 3,
     path: { type: "LineString", coordinates: [] }, steps: [],
+    start: { lng: -0.1246, lat: 51.4994, label: "Depot" },
+    end: { lng: -0.1246, lat: 51.4994, label: "Depot" },
   });
   const list = [
     p({ id: "a", status: "suspected", lng: -0.1247, lat: 51.4962 }),

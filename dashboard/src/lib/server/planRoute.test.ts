@@ -474,6 +474,10 @@ describe("planRoute", () => {
       estimated: false,
       considered_all: true,
       steps: [],
+      anchors: {
+        start: { lng: -0.1246, lat: 51.4994, label: "Depot" },
+        end: { lng: -0.1246, lat: 51.4994, label: "Depot" },
+      },
     });
 
     expect(tables.work_orders).toHaveLength(2);
@@ -490,6 +494,13 @@ describe("planRoute", () => {
 
     // Nothing to replace, so no deletes.
     expect(writes.some((w) => w.op === "delete")).toBe(false);
+  });
+
+  it("echoes the resolved depot anchors on the response", async () => {
+    const { db } = makeDb(baseTables());
+    const result = await planRoute({ db, osrm: makeOsrm() }, COUNT_REQ);
+    expect(result.start).toEqual({ lng: -0.1246, lat: 51.4994, label: "Depot" });
+    expect(result.end).toEqual({ lng: -0.1246, lat: 51.4994, label: "Depot" });
   });
 
   it("honours manual mode ordering of candidates", async () => {

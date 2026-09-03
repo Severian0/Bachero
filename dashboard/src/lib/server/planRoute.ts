@@ -7,7 +7,14 @@ import { solve } from "@/lib/solver/heuristic";
 import { buildMatrix } from "@/lib/solver/haversine";
 import type { LngLat, Matrix } from "@/lib/solver/haversine";
 import { DEFAULT_TIME_ZONE, SHIFT_START_HOUR, shiftStartMs } from "@/lib/solver/schedule";
-import type { PlanRouteRequest, PlanRouteResponse, PlanRouteStop, PotholeMapRow, RouteStep } from "@/lib/types";
+import type {
+  PlanRouteRequest,
+  PlanRouteResponse,
+  PlanRouteStop,
+  PotholeMapRow,
+  ResolvedAnchor,
+  RouteStep,
+} from "@/lib/types";
 
 /** Error carrying the HTTP status the route handler should return. */
 export class PlanRouteError extends Error {
@@ -305,6 +312,9 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
     throw new PlanRouteError(500, "The crew depot could not be read.");
   }
 
+  const startAnchor: ResolvedAnchor = { lng: depot[0], lat: depot[1], label: "Depot" };
+  const endAnchor: ResolvedAnchor = startAnchor;
+
   const existing = await loadExistingPlan(db, req);
   const queue = await loadQueue(db, existing);
   let candidates = pickCandidates(queue, req);
@@ -379,7 +389,14 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
         total_km: totalKm,
         total_minutes: totalMinutes,
         baseline_km: baselineKm,
-        objective: { request: req, candidate_count: candidates.length, estimated, considered_all: consideredAll, steps },
+        objective: {
+          request: req,
+          candidate_count: candidates.length,
+          estimated,
+          considered_all: consideredAll,
+          steps,
+          anchors: { start: startAnchor, end: endAnchor },
+        },
       })
       .select("id"),
   );
@@ -448,5 +465,7 @@ export async function planRoute(deps: PlanRouteDeps, req: PlanRouteRequest): Pro
     baseline_km: baselineKm,
     path: line,
     steps,
+    start: startAnchor,
+    end: endAnchor,
   };
 }
