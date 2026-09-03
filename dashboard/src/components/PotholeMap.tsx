@@ -34,7 +34,7 @@ export default function PotholeMap() {
       overlay={
         <>
           <div style={{ position: "absolute", left: "var(--s4)", bottom: "var(--s4)", zIndex: 50, display: "grid", gap: "var(--s2)", justifyItems: "start" }}>
-            <PlanRouteButton />
+            <PlanNearestButton />
             <Legend />
           </div>
           {status !== "ready" && <MapStatusPanel status={status} />}
@@ -153,18 +153,30 @@ function IconButton({
 }
 
 /** One click: a depot loop to the nearest open defect, planned and shown. */
-function PlanRouteButton() {
+/**
+ * The one-click fast path: a depot loop to the nearest open defect.
+ *
+ * Deliberately not called "Plan route". It discards the operator's selection
+ * and forces manual mode, while the column's "Plan route" opens the sheet and
+ * keeps everything they set up. Two buttons with one name, one of them
+ * destructive, is a trap. It is also disabled once a plan exists, so it cannot
+ * quietly replace a route that is about to be dispatched.
+ */
+function PlanNearestButton() {
   const planNearest = useConsole((s) => s.planNearest);
   const planState = useConsole((s) => s.planState);
+  const busy = planState === "planning";
+  const hasPlan = planState === "planned";
   return (
     <button
       type="button"
       className="btn btn-primary"
       style={{ boxShadow: "var(--shadow-1)" }}
-      disabled={planState === "planning"}
+      disabled={busy || hasPlan}
+      title={hasPlan ? "Discard the current route first" : "Plan a loop to the nearest open defect"}
       onClick={() => void planNearest()}
     >
-      {planState === "planning" ? "Planning" : "Plan route"}
+      {busy ? "Planning" : "Plan nearest"}
     </button>
   );
 }
