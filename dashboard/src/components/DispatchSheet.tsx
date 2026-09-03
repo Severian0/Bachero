@@ -6,7 +6,7 @@ import { displayName, planCandidates, severityGrade } from "@/lib/console/derive
 import { hhmm, km, minutes, parseAddresses, pct, plural } from "@/lib/console/format";
 import { useConsole, type Mode } from "@/lib/console/store";
 import { SEVERITY_WORD, STATUS_VISUAL } from "@/lib/console/visual";
-import type { Pothole } from "@/lib/data/types";
+import { potholeRef, type Pothole } from "@/lib/data/types";
 
 const MODES: { key: Mode; label: string }[] = [
   { key: "manual", label: "Pick these" },
@@ -45,6 +45,10 @@ export default function DispatchSheet() {
   const dispatchResult = useConsole((s) => s.dispatchResult);
 
   const setPlanner = useConsole((s) => s.setPlanner);
+  const startAnchor = useConsole((s) => s.planner.start);
+  const endAnchor = useConsole((s) => s.planner.end);
+  const setStartAnchor = useConsole((s) => s.setStartAnchor);
+  const setEndAnchor = useConsole((s) => s.setEndAnchor);
   const setSheetOpen = useConsole((s) => s.setSheetOpen);
   const setPreviewDrive = useConsole((s) => s.setPreviewDrive);
   const toggleSelected = useConsole((s) => s.toggleSelected);
@@ -93,6 +97,10 @@ export default function DispatchSheet() {
   const candidates = planCandidates(all, {
     mode: planner.mode, selectedCount: selected.length,
   }, plan);
+  // Anchor choices are limited to work that is actually still open.
+  const anchorable = all
+    .filter((x) => x.status === "suspected" || x.status === "confirmed")
+    .sort((a, b) => b.priority - a.priority);
 
   const planned = planState === "planned" && plan ? plan : null;
   const sent = dispatchState === "sent" && planned;
@@ -268,6 +276,68 @@ export default function DispatchSheet() {
 
               {!planned && (
                 <div style={{ display: "grid", gap: "var(--s3)" }}>
+                  <div style={{ display: "grid", gap: "var(--s1)" }}>
+                    <span className="micro secondary">Start</span>
+                    <div role="group" aria-label="Start" style={{ display: "flex", gap: 6 }}>
+                      <Dial
+                        label="Depot"
+                        on={startAnchor.kind === "depot"}
+                        onClick={() => setStartAnchor({ kind: "depot" })}
+                      />
+                      <Dial
+                        label="Pothole"
+                        on={startAnchor.kind === "pothole"}
+                        disabled={anchorable.length === 0}
+                        onClick={() => setStartAnchor({ kind: "pothole", id: anchorable[0].id })}
+                      />
+                    </div>
+                    {startAnchor.kind === "pothole" && (
+                      <select
+                        style={INPUT}
+                        aria-label="Start pothole"
+                        value={startAnchor.id}
+                        onChange={(e) => setStartAnchor({ kind: "pothole", id: e.target.value })}
+                      >
+                        {anchorable.map((x) => (
+                          <option key={x.id} value={x.id}>
+                            {potholeRef(x.id)} - {displayName(x)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div style={{ display: "grid", gap: "var(--s1)" }}>
+                    <span className="micro secondary">End</span>
+                    <div role="group" aria-label="End" style={{ display: "flex", gap: 6 }}>
+                      <Dial
+                        label="Same as start"
+                        on={endAnchor.kind === "same"}
+                        onClick={() => setEndAnchor({ kind: "same" })}
+                      />
+                      <Dial
+                        label="Pothole"
+                        on={endAnchor.kind === "pothole"}
+                        disabled={anchorable.length === 0}
+                        onClick={() => setEndAnchor({ kind: "pothole", id: anchorable[0].id })}
+                      />
+                    </div>
+                    {endAnchor.kind === "pothole" && (
+                      <select
+                        style={INPUT}
+                        aria-label="End pothole"
+                        value={endAnchor.id}
+                        onChange={(e) => setEndAnchor({ kind: "pothole", id: e.target.value })}
+                      >
+                        {anchorable.map((x) => (
+                          <option key={x.id} value={x.id}>
+                            {potholeRef(x.id)} - {displayName(x)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
                   <div role="group" aria-label="Planning mode" style={{ display: "flex", gap: 6 }}>
                     {MODES.map((m) => {
                       const on = planner.mode === m.key;
@@ -507,6 +577,38 @@ const INPUT: React.CSSProperties = {
   border: "1px solid var(--rule)",
   borderRadius: "var(--r-md)",
 };
+
+/** One segmented choice, styled as the planning-mode buttons above it. */
+function Dial(
+  { label, on, disabled, onClick }: { label: string; on: boolean; disabled?: boolean; onClick: () => void },
+) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        flex: 1,
+        height: 30,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "var(--t-small)",
+        fontWeight: 600,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+        borderRadius: "var(--r-md)",
+        border: `1px solid ${on ? "var(--action)" : "var(--rule)"}`,
+        background: on ? "var(--action)" : "var(--surface)",
+        color: on ? "var(--action-ink)" : "var(--ink)",
+        transition: "background 120ms linear, border-color 120ms linear",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
