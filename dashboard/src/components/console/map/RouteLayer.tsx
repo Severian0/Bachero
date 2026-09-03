@@ -4,7 +4,6 @@ import { Layer, Marker, Source, useMap } from "react-map-gl/maplibre";
 import { useConsole } from "@/lib/console/store";
 import { MAP_FALLBACK, readToken } from "@/lib/map/tokens";
 import { buildArrowImage } from "@/lib/map/arrow";
-import { DEPOT } from "@/lib/data/synthetic";
 
 export function RouteLayer() {
   const plan = useConsole((s) => s.plan);
@@ -50,12 +49,20 @@ export function RouteLayer() {
           />
         )}
       </Source>
-      <Marker longitude={DEPOT[0]} latitude={DEPOT[1]} anchor="center" style={{ zIndex: 30 }}>
+      <Marker longitude={plan.start.lng} latitude={plan.start.lat} anchor="center" style={{ zIndex: 30 }}>
         <div
-          aria-label="Depot"
+          aria-label={plan.start.label}
           style={{ width: 12, height: 12, borderRadius: "var(--r-sm)", border: "1.5px solid var(--rail)", background: "var(--surface)" }}
         />
       </Marker>
+      {(plan.end.lng !== plan.start.lng || plan.end.lat !== plan.start.lat) && (
+        <Marker longitude={plan.end.lng} latitude={plan.end.lat} anchor="center" style={{ zIndex: 30 }}>
+          <div
+            aria-label={plan.end.label}
+            style={{ width: 12, height: 12, borderRadius: "var(--r-sm)", border: "1.5px solid var(--rail)", background: "var(--rail)" }}
+          />
+        </Marker>
+      )}
       {plan.stops.map((s) => (
         <Marker key={s.work_order_id} longitude={s.lng} latitude={s.lat} anchor="center" style={{ zIndex: 45 }}>
           <div

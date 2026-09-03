@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { nearestOpenPothole } from "./nearest";
+import { firstLegKm, nearestOpenPothole } from "./nearest";
+import { haversineKm } from "@/lib/solver/haversine";
+import type { PlanRouteResponse } from "@/lib/types";
 import type { Pothole } from "@/lib/data/types";
 
 const base: Pothole = {
@@ -31,5 +33,30 @@ describe("nearestOpenPothole", () => {
     const first = p({ id: "first", lng: 0.001, lat: 0 });
     const second = p({ id: "second", lng: 0.001, lat: 0 });
     expect(nearestOpenPothole([first, second], [0, 0])?.id).toBe("first");
+  });
+});
+
+describe("firstLegKm", () => {
+  const planOf = (start: [number, number], stops: [number, number][]): PlanRouteResponse => ({
+    route_plan_id: "r",
+    stops: stops.map(([lng, lat], i) => ({
+      work_order_id: `w${i}`, pothole_id: `p${i}`, stop_order: i + 1,
+      eta: "2026-09-03T08:00:00.000Z", lng, lat, severity: 0.5, photo_url: null,
+    })),
+    total_km: 0, total_minutes: 0, baseline_km: 0,
+    path: { type: "LineString", coordinates: [] },
+    steps: [],
+    start: { lng: start[0], lat: start[1], label: "Depot" },
+    end: { lng: start[0], lat: start[1], label: "Depot" },
+  });
+
+  it("measures from the start anchor to the first stop", () => {
+    // One degree of longitude at this latitude is about 69 km; 0.001 is about 69 m.
+    const plan = planOf([0, 51.5], [[0.1, 51.5], [0.2, 51.5]]);
+    expect(firstLegKm(plan)).toBeCloseTo(haversineKm([0, 51.5], [0.1, 51.5]), 9);
+  });
+
+  it("is zero when the plan has no stops", () => {
+    expect(firstLegKm(planOf([0, 51.5], []))).toBe(0);
   });
 });

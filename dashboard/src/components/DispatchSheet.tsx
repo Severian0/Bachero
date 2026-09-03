@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { OPERATOR } from "@/lib/console/branding";
 import { displayName, planCandidates, severityGrade } from "@/lib/console/derive";
 import { hhmm, km, minutes, parseAddresses, pct, plural } from "@/lib/console/format";
+import { firstLegKm } from "@/lib/console/nearest";
 import { useConsole, type Mode } from "@/lib/console/store";
 import { SEVERITY_WORD, STATUS_VISUAL } from "@/lib/console/visual";
 import { potholeRef, type Pothole } from "@/lib/data/types";
@@ -440,6 +441,11 @@ export default function DispatchSheet() {
                     <span className="data">{pct(Math.max(0, saved))}</span> shorter than visiting by priority (
                     <span className="data">{km(planned.baseline_km)}</span>)
                   </p>
+                  {firstLegKm(planned) > 1 && (
+                    <p className="secondary" style={{ margin: "var(--s1) 0 0", fontSize: "var(--t-small)" }}>
+                      First stop {km(firstLegKm(planned))} from {planned.start.label}.
+                    </p>
+                  )}
                 </div>
               )}
 
