@@ -13,6 +13,52 @@ const cands = [
   { id: "nw", priority: 4 }, { id: "se", priority: 3 }, { id: "ne", priority: 2 }, { id: "sw", priority: 1 },
 ];
 
+// The same square plus an end anchor 1.1 km east of the depot, at matrix
+// index 5. Candidates keep indices 0..3 (matrix 1..4).
+const ptsOpen: [number, number][] = [...pts, [0.01, 0]];
+const mOpen: Matrix = buildMatrix(ptsOpen, 30);
+const END = 5;
+
+describe("open routes (endIndex)", () => {
+  it("tourKm and tourMin charge the leg to the end anchor, not a return to the start", () => {
+    expect(tourKm([0], mOpen, END)).toBeCloseTo(mOpen.distanceKm[0][1] + mOpen.distanceKm[1][END], 9);
+    expect(tourMin([0], mOpen, 20, END)).toBeCloseTo(
+      mOpen.durationMin[0][1] + mOpen.durationMin[1][END] + 20, 9,
+    );
+  });
+
+  it("endIndex 0 and endIndex omitted both reproduce today's closed tour exactly", () => {
+    const closed = solve(cands, m, { mode: "manual", serviceMin: 20 });
+    const explicit = solve(cands, m, { mode: "manual", serviceMin: 20, endIndex: 0 });
+    expect(explicit).toEqual(closed);
+    expect(tourKm([0, 1, 2, 3], m, 0)).toBeCloseTo(tourKm([0, 1, 2, 3], m), 9);
+    expect(tourMin([0, 1, 2, 3], m, 20, 0)).toBeCloseTo(tourMin([0, 1, 2, 3], m, 20), 9);
+  });
+
+  it("a time budget respects the leg to the end anchor", () => {
+    const s = solve(cands, mOpen, { mode: "time", timeBudgetMin: 50, serviceMin: 20, endIndex: END });
+    expect(s.order.length).toBeGreaterThan(0);
+    expect(s.totalMin).toBeLessThanOrEqual(50);
+    // The reported total is the open-path total, end leg included.
+    expect(s.totalMin).toBeCloseTo(tourMin(s.order, mOpen, 20, END), 9);
+    expect(s.totalKm).toBeCloseTo(tourKm(s.order, mOpen, END), 9);
+  });
+
+  it("2-opt uncrosses a deliberately crossed open path", () => {
+    const crossed = [0, 1, 2, 3]; // nw, se, ne, sw crosses itself
+    const result = twoOpt(crossed, mOpen, mOpen.durationMin, END);
+    expect([...result].sort()).toEqual([0, 1, 2, 3]);
+    expect(tourKm(result, mOpen, END)).toBeLessThan(tourKm(crossed, mOpen, END));
+  });
+
+  it("the baseline uses the same end, so the percent-shorter figure stays honest", () => {
+    const s = solve(cands, mOpen, { mode: "manual", serviceMin: 0, endIndex: END });
+    const chosen = [0, 1, 2, 3]; // priority order
+    expect(s.baselineKm).toBeCloseTo(tourKm(chosen, mOpen, END), 9);
+    expect(s.totalKm).toBeLessThanOrEqual(s.baselineKm + 1e-9);
+  });
+});
+
 describe("haversine", () => {
   it("1 degree of latitude is ~111 km", () => {
     expect(haversineKm([0, 0], [0, 1])).toBeCloseTo(111.2, 0);

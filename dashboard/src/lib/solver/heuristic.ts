@@ -6,6 +6,8 @@ export interface Constraints {
   maxStops?: number;
   timeBudgetMin?: number;
   serviceMin: number;
+  /** Matrix index the tour finishes at. 0 (the start) keeps today's closed loop. */
+  endIndex?: number;
 }
 
 export type SkipReason = "stop_limit" | "time_budget";
@@ -28,24 +30,24 @@ export interface Solution {
 
 const mi = (i: number) => i + 1;
 
-export function tourKm(order: number[], m: Matrix): number {
+export function tourKm(order: number[], m: Matrix, end = 0): number {
   if (order.length === 0) return 0;
   let km = m.distanceKm[0][mi(order[0])];
   for (let k = 0; k + 1 < order.length; k++) km += m.distanceKm[mi(order[k])][mi(order[k + 1])];
-  return km + m.distanceKm[mi(order[order.length - 1])][0];
+  return km + m.distanceKm[mi(order[order.length - 1])][end];
 }
 
-export function tourMin(order: number[], m: Matrix, serviceMin: number): number {
+export function tourMin(order: number[], m: Matrix, serviceMin: number, end = 0): number {
   if (order.length === 0) return 0;
   let min = m.durationMin[0][mi(order[0])];
   for (let k = 0; k + 1 < order.length; k++) min += m.durationMin[mi(order[k])][mi(order[k + 1])];
-  return min + m.durationMin[mi(order[order.length - 1])][0] + serviceMin * order.length;
+  return min + m.durationMin[mi(order[order.length - 1])][end] + serviceMin * order.length;
 }
 
 /** Extra minutes from inserting candidate c between positions pos-1 and pos of `order`. */
-function marginalMin(order: number[], c: number, pos: number, m: Matrix, serviceMin: number): number {
+function marginalMin(order: number[], c: number, pos: number, m: Matrix, serviceMin: number, end = 0): number {
   const prev = pos === 0 ? 0 : mi(order[pos - 1]);
-  const next = pos === order.length ? 0 : mi(order[pos]);
+  const next = pos === order.length ? end : mi(order[pos]);
   return m.durationMin[prev][mi(c)] + m.durationMin[mi(c)][next] - m.durationMin[prev][next] + serviceMin;
 }
 
@@ -59,7 +61,7 @@ function marginalMin(order: number[], c: number, pos: number, m: Matrix, service
  * its time budget, which is invisible with a straight-line matrix (where the
  * two are proportional) and appears the moment a real road matrix is used.
  */
-export function twoOpt(order: number[], m: Matrix, cost: number[][] = m.durationMin): number[] {
+export function twoOpt(order: number[], m: Matrix, cost: number[][] = m.durationMin, end = 0): number[] {
   const o = [...order];
   let improved = true;
   while (improved) {
@@ -67,7 +69,7 @@ export function twoOpt(order: number[], m: Matrix, cost: number[][] = m.duration
     for (let i = 0; i < o.length - 1; i++) {
       for (let j = i + 1; j < o.length; j++) {
         const a = i === 0 ? 0 : mi(o[i - 1]), b = mi(o[i]);
-        const c = mi(o[j]), d = j === o.length - 1 ? 0 : mi(o[j + 1]);
+        const c = mi(o[j]), d = j === o.length - 1 ? end : mi(o[j + 1]);
         const delta = cost[a][c] + cost[b][d] - cost[a][b] - cost[c][d];
         if (delta < -1e-9) {
           o.splice(i, j - i + 1, ...o.slice(i, j + 1).reverse());
@@ -80,6 +82,7 @@ export function twoOpt(order: number[], m: Matrix, cost: number[][] = m.duration
 }
 
 export function solve(candidates: Candidate[], m: Matrix, c: Constraints): Solution {
+  const end = c.endIndex ?? 0;
   const remaining = new Set(candidates.map((_, i) => i));
   const skipped: Skipped[] = [];
   let order: number[] = [];
@@ -91,7 +94,7 @@ export function solve(candidates: Candidate[], m: Matrix, c: Constraints): Solut
     // index order; the strict `>` below means the lowest index wins ties.
     for (const i of remaining) {
       for (let pos = 0; pos <= order.length; pos++) {
-        const cost = marginalMin(order, i, pos, m, c.serviceMin);
+        const cost = marginalMin(order, i, pos, m, c.serviceMin, end);
         const score = candidates[i].priority / Math.max(cost, 1e-6);
         if (!best || score > best.score + 1e-12) {
           best = { i, pos, score, cost };
@@ -100,7 +103,7 @@ export function solve(candidates: Candidate[], m: Matrix, c: Constraints): Solut
     }
     if (!best) break;
     const trial = [...order.slice(0, best.pos), best.i, ...order.slice(best.pos)];
-    if (c.mode === "time" && tourMin(trial, m, c.serviceMin) > (c.timeBudgetMin ?? 0)) {
+    if (c.mode === "time" && tourMin(trial, m, c.serviceMin, end) > (c.timeBudgetMin ?? 0)) {
       // Does not fit here; a cheaper candidate might, so keep going without it.
       skipped.push({ id: candidates[best.i].id, reason: "time_budget", marginalMin: best.cost });
       remaining.delete(best.i);
@@ -117,13 +120,13 @@ export function solve(candidates: Candidate[], m: Matrix, c: Constraints): Solut
 
   // Optimise on the same quantity the budget constrains, so a tour that fitted
   // before the swap still fits after it.
-  order = twoOpt(order, m);
+  order = twoOpt(order, m, m.durationMin, end);
   const chosen = [...order].sort((a, b) => candidates[b].priority - candidates[a].priority || a - b);
   return {
     order,
-    totalMin: tourMin(order, m, c.serviceMin),
-    totalKm: tourKm(order, m),
-    baselineKm: tourKm(chosen, m),
+    totalMin: tourMin(order, m, c.serviceMin, end),
+    totalKm: tourKm(order, m, end),
+    baselineKm: tourKm(chosen, m, end),
     skipped,
   };
 }
