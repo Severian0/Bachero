@@ -89,6 +89,21 @@ export interface RoutePlanMapRow {
   work_orders?: WorkOrder[];
 }
 
+/** One turn instruction along a planned path (spec section 5). */
+export interface RouteStep {
+  instruction: string; // "Turn left onto Millbank"
+  lng: number;
+  lat: number;
+  distance_m: number;
+}
+
+/** A route anchor after the server resolved it to a coordinate (spec section 5). */
+export interface ResolvedAnchor {
+  lng: number;
+  lat: number;
+  label: string; // "Depot", or the pothole's "ref - street"
+}
+
 // ─── /api/plan-route contract (docs/ARCHITECTURE.md §5) ────────────────────────────
 
 export type PlanMode = "manual" | "count" | "time";
