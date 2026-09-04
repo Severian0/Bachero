@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Mark } from "./Logo";
 import { AUTHORITY, OPERATOR } from "@/lib/console/branding";
 import { km, plural } from "@/lib/console/format";
@@ -71,6 +72,17 @@ export default function Header({
         <Rule className="hdr-clock" />
         <Clock />
         <Rule className="hdr-clock" />
+        <Link
+          href="/settings"
+          aria-label="Settings: crews and depots"
+          title="Crews and depots"
+          className="hdr-settings"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="8" cy="8" r="2.2" />
+            <path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" />
+          </svg>
+        </Link>
         <Operator />
       </div>
     </header>
@@ -161,7 +173,7 @@ function Operator() {
     .join("");
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
+    <div className="hdr-operator" style={{ alignItems: "center", gap: "var(--s2)" }}>
       <span
         aria-hidden
         style={{

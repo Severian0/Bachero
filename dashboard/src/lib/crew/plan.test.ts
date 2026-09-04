@@ -21,7 +21,7 @@ function row(over: Partial<RoutePlanMapRow> = {}): RoutePlanMapRow {
     id: "r1", crew_id: "c1", plan_date: "2026-09-04", status: "published",
     total_km: 6, total_minutes: 70, baseline_km: 13, objective: null,
     path_geojson: { type: "LineString", coordinates: [[-0.1246, 51.4994], [-0.133, 51.4984], [-0.1246, 51.4994]] },
-    crew: { id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 },
+    crew: { id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 },
     work_orders: [
       order("w2", 2, "p2", -0.129, 51.496, "Marsham Street"),
       order("w1", 1, "p1", -0.133, 51.4984, "Victoria Street"),

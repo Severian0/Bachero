@@ -63,9 +63,15 @@ const DETECTION_FLEET: { id: string; label: string }[] = [
   { id: "00000000-0000-0000-0000-00000000000a", label: "Gritter 1" },
 ];
 
-const CREWS: Crew[] = [
-  { id: "00000000-0000-0000-0000-000000000006", authority_id: AUTHORITY_ID, name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 },
+/**
+ * Module-level so a crew added on the settings page is still there when the
+ * console mounts its own source: the synthetic fleet has no database to
+ * remember it in, so the module is the database for the session.
+ */
+const crews: Crew[] = [
+  { id: "00000000-0000-0000-0000-000000000006", authority_id: AUTHORITY_ID, name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: DEPOT[0], depot_lat: DEPOT[1] },
 ];
+let crewSeq = 0;
 
 function uuidFrom(rng: () => number): string {
   const hex = () => Math.floor(rng() * 16).toString(16);
@@ -133,7 +139,7 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
 
   return {
     async load(): Promise<LoadResult> {
-      return { potholes: [...potholes.values()], vehicles: vehState.map(vehicle), crews: CREWS, kmToday };
+      return { potholes: [...potholes.values()], vehicles: vehState.map(vehicle), crews: [...crews], kmToday };
     },
     subscribe(h) {
       handlers.add(h);
@@ -210,6 +216,21 @@ export function createSyntheticSource(seed = 20260902): ConsoleDataSource {
         start: { lng: DEPOT[0], lat: DEPOT[1], label: "Depot" },
         end: { lng: DEPOT[0], lat: DEPOT[1], label: "Depot" },
       };
+    },
+    async saveCrew(input) {
+      const { id, ...fields } = input;
+      const i = id ? crews.findIndex((c) => c.id === id) : -1;
+      if (id && i < 0) throw new Error("Crew not found.");
+      const crew: Crew = i >= 0
+        ? { ...crews[i], ...fields }
+        : { id: `00000000-0000-0000-0000-0000000000c${(crewSeq++).toString(16)}`, authority_id: AUTHORITY_ID, ...fields };
+      if (i >= 0) crews[i] = crew; else crews.push(crew);
+      return crew;
+    },
+    async deleteCrew(id) {
+      const i = crews.findIndex((c) => c.id === id);
+      if (i < 0) throw new Error("Crew not found.");
+      crews.splice(i, 1);
     },
     async dispatch(req): Promise<DispatchResult> {
       await new Promise((r) => setTimeout(r, 600));

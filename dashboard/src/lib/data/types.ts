@@ -66,6 +66,19 @@ export interface SubscribeHandlers {
   onKmToday?(km: number): void;
 }
 
+/** What the settings page sends to make or change a crew. Longitude first. */
+export interface CrewInput {
+  id?: string;
+  name: string;
+  depot_lng: number;
+  depot_lat: number;
+  shift_minutes: number;
+  repairs_per_shift: number;
+}
+
+/** A crew with routes on record cannot go; the page says so rather than a code. */
+export const CREW_IN_USE_ERROR = "This crew has routes on record, so it cannot be deleted.";
+
 export interface ConsoleDataSource {
   load(): Promise<LoadResult>;
   subscribe(handlers: SubscribeHandlers): () => void;
@@ -73,6 +86,9 @@ export interface ConsoleDataSource {
   dismiss(potholeId: string): Promise<void>;
   planRoute(req: PlanRouteRequest): Promise<PlanRouteResponse>;
   dispatch(req: DispatchRequest): Promise<DispatchResult>;
+  /** Insert (no id) or update (id) a crew and return it as `crews_map` would. */
+  saveCrew(input: CrewInput): Promise<Crew>;
+  deleteCrew(id: string): Promise<void>;
 }
 
 export function potholeRef(id: string): string {

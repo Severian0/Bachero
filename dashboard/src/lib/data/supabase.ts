@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Crew, PotholeMapRow, VehiclePositionRow } from "@/lib/types";
-import type { ConsoleDataSource, Detection, DispatchResult, LoadResult, Vehicle } from "./types";
+import { CREW_IN_USE_ERROR, type ConsoleDataSource, type Detection, type DispatchResult, type LoadResult, type Vehicle } from "./types";
 import { toPothole, toVehicle } from "./types";
+
+/** The demo authority every seeded row belongs to. Tenancy is a policy change later. */
+const AUTHORITY_ID = "00000000-0000-0000-0000-000000000001";
 
 export function startOfTodayISO(): string {
   const d = new Date();
@@ -41,7 +44,7 @@ export function createSupabaseSource(client: SupabaseClient): ConsoleDataSource 
         client.from("potholes_map").select("*")
           .or(`status.in.(suspected,confirmed,scheduled),and(status.eq.repaired,repaired_at.gte.${startOfTodayISO()})`),
         client.from("latest_vehicle_positions").select("*"),
-        client.from("crews").select("*"),
+        client.from("crews_map").select("*"),
         client.from("trips").select("distance_m").gte("started_at", startOfTodayISO()),
         stopOrders(),
       ]);
@@ -92,6 +95,30 @@ export function createSupabaseSource(client: SupabaseClient): ConsoleDataSource 
     async dismiss(potholeId) {
       const { error } = await client.from("potholes").update({ status: "false_positive" }).eq("id", potholeId);
       if (error) throw new Error(error.message);
+    },
+
+    async saveCrew(input) {
+      const { id, depot_lng, depot_lat, ...fields } = input;
+      // EWKT is longitude first; the view hands it back as two numbers.
+      const row = { ...fields, depot: `SRID=4326;POINT(${depot_lng} ${depot_lat})` };
+      const write = id
+        ? client.from("crews").update(row).eq("id", id).select("id")
+        : client.from("crews").insert({ ...row, authority_id: AUTHORITY_ID }).select("id");
+      const { data, error } = await write;
+      if (error) throw new Error(error.message);
+      const savedId = (data?.[0] as { id: string } | undefined)?.id ?? id;
+      if (!savedId) throw new Error("The crew was not saved.");
+      const back = await client.from("crews_map").select("*").eq("id", savedId);
+      if (back.error) throw new Error(back.error.message);
+      const crew = back.data?.[0] as Crew | undefined;
+      if (!crew) throw new Error("The crew was saved but could not be read back.");
+      return crew;
+    },
+    async deleteCrew(id) {
+      const { error } = await client.from("crews").delete().eq("id", id);
+      if (!error) return;
+      // 23503 is Postgres's foreign-key violation: route_plans still point here.
+      throw new Error(error.code === "23503" ? CREW_IN_USE_ERROR : error.message);
     },
 
     planRoute: (req) => postJson("/api/plan-route", req),

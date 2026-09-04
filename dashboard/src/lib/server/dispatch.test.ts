@@ -204,6 +204,8 @@ function makePlan(stops: number, over: Partial<DispatchPlan> = {}): DispatchPlan
       name: "Crew A",
       shift_minutes: 480,
       repairs_per_shift: 12,
+      depot_lng: -0.1246,
+      depot_lat: 51.4994,
       depot: DEPOT_HEX,
     },
     work_orders: Array.from({ length: stops }, (_, i) => ({

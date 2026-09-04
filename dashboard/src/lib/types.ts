@@ -56,6 +56,9 @@ export interface Crew {
   name: string;
   shift_minutes: number;
   repairs_per_shift: number;
+  /** From `crews_map`; the base table's `depot` geography is never read by a client. */
+  depot_lng: number;
+  depot_lat: number;
 }
 
 export interface WorkOrder {

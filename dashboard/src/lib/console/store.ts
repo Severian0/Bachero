@@ -5,6 +5,7 @@ import type {
 } from "@/lib/data/types";
 import { nearestOpenPothole } from "./nearest";
 import { DEPOT } from "@/lib/data/synthetic";
+import type { LngLat } from "@/lib/solver/haversine";
 import { FILTER_CYCLE, isSelectable, type Filter } from "./derive";
 
 export type Mode = "manual" | "count" | "time";
@@ -251,9 +252,11 @@ export function createConsoleStore() {
       async planNearest() {
         const { crews, planner, potholes } = get();
         const crewId = planner.crewId ?? crews[0]?.id ?? null;
-        // DEPOT matches the seeded crews.depot; the server anchors the real
-        // route at the true depot either way.
-        const nearest = nearestOpenPothole(Object.values(potholes), DEPOT);
+        // Nearest to the chosen crew's own depot; the server anchors the real
+        // route there either way. DEPOT is only the synthetic fallback.
+        const crew = crews.find((c) => c.id === crewId);
+        const from: LngLat = crew ? [crew.depot_lng, crew.depot_lat] : DEPOT;
+        const nearest = nearestOpenPothole(Object.values(potholes), from);
         if (!ds || !crewId || !nearest) return;
         set((s) => ({
           planner: { ...s.planner, crewId, mode: "manual" },

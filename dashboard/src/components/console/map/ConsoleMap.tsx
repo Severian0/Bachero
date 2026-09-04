@@ -15,6 +15,7 @@ import { isSupabaseConfigured } from "@/lib/data";
 import { DEPOT } from "@/lib/data/synthetic";
 import { useConsole } from "@/lib/console/store";
 import { Graticule } from "./Graticule";
+import { boundsOf, networkPoints } from "@/lib/console/camera";
 import { ScaleBar } from "./ScaleBar";
 
 /**
@@ -54,11 +55,9 @@ export function ConsoleMap({
   const fitted = useRef(false);
   useEffect(() => {
     if (fitted.current || loadState !== "ready" || !isSupabaseConfigured() || !mapRef.current) return;
-    const pts = Object.values(useConsole.getState().potholes).filter((p) => p.status !== "false_positive").map((p) => [p.lng, p.lat] as [number, number]);
-    if (!pts.length) return;
-    pts.push(DEPOT);
-    const lngs = pts.map((p) => p[0]), lats = pts.map((p) => p[1]);
-    mapRef.current.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]], { ...fitOptions(), duration: 0 });
+    const { potholes, crews } = useConsole.getState();
+    if (!Object.keys(potholes).length) return;
+    mapRef.current.fitBounds(boundsOf(networkPoints(Object.values(potholes), crews, DEPOT)), { ...fitOptions(), duration: 0 });
     fitted.current = true;
   }, [loadState]);
 

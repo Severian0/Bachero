@@ -7,6 +7,7 @@ import { MapLayers } from "./console/map/MapLayers";
 import { useConsole } from "@/lib/console/store";
 import { STATUS_VISUAL } from "@/lib/console/visual";
 import { DEPOT } from "@/lib/data/synthetic";
+import { boundsOf, networkPoints } from "@/lib/console/camera";
 import type { PotholeStatus } from "@/lib/types";
 
 /**
@@ -97,16 +98,8 @@ function MapControls() {
   // the whole night's work in one frame.
   const fitNetwork = () => {
     if (!map) return;
-    const pts: [number, number][] = Object.values(useConsole.getState().potholes)
-      .filter((p) => p.status !== "false_positive")
-      .map((p) => [p.lng, p.lat]);
-    pts.push(DEPOT);
-    const lngs = pts.map((p) => p[0]);
-    const lats = pts.map((p) => p[1]);
-    map.fitBounds(
-      [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-      fitOptions(),
-    );
+    const { potholes, crews } = useConsole.getState();
+    map.fitBounds(boundsOf(networkPoints(Object.values(potholes), crews, DEPOT)), fitOptions());
   };
 
   return (

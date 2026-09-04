@@ -105,7 +105,7 @@ Nothing else to do; the trigger sets `pothole_id`.
 | Detail panel | `GET /rest/v1/detections?pothole_id=eq.{id}&order=recorded_at.desc` |
 | Dismiss a false positive | `PATCH /rest/v1/potholes?id=eq.{id}` `{"status":"false_positive"}` |
 | Queue table / solver preview | `GET /rest/v1/repair_queue?order=priority.desc` |
-| Crews | `GET /rest/v1/crews` |
+| Crews | `GET /rest/v1/crews_map` (depot as `depot_lng`/`depot_lat`); the settings page writes `crews` with an EWKT `depot` |
 | Plan a route | `POST /api/plan-route` (§5) |
 | Dispatch | `POST /api/dispatch` (§5) |
 | Route detail (one call, nested) | `GET /rest/v1/route_plans_map?id=eq.{id}&select=*,crew:crews(*),work_orders(*,pothole:potholes_map(*))&work_orders.order=stop_order` |

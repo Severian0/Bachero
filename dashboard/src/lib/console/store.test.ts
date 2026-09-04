@@ -23,11 +23,13 @@ function fakeDs(over: Partial<ConsoleDataSource> = {}): ConsoleDataSource {
     dismiss: vi.fn(async () => {}),
     planRoute: vi.fn(async () => ({ route_plan_id: "r1", stops: [{ work_order_id: "w1", pothole_id: "a", stop_order: 1, eta: "2026-09-03T08:20:00.000Z", lng: -0.12, lat: 51.49, severity: 0.5, photo_url: null }], total_km: 1, total_minutes: 2, baseline_km: 3, path: { type: "LineString" as const, coordinates: [] }, steps: [], start: DEPOT_ANCHOR, end: DEPOT_ANCHOR })),
     dispatch: vi.fn(async () => ({ sent: true, crewPage: "/route/r1" })),
+    saveCrew: vi.fn(async (input) => ({ ...CREW, ...input, id: input.id ?? "c-new" })),
+    deleteCrew: vi.fn(async () => {}),
     ...over,
   };
 }
 
-const CREW: Crew = { id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 };
+const CREW: Crew = { id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 };
 
 /** A source that records the wire request every plan sends. */
 function capturingDs(sent: PlanRouteRequest[]): ConsoleDataSource {
@@ -184,7 +186,7 @@ describe("console store", () => {
     const ds = fakeDs();
     const s = createConsoleStore();
     s.getState().setDataSource(ds);
-    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 }]);
     s.getState().upsertPothole(base);
     s.getState().toggleSelected("a");
     await s.getState().planRoute();
@@ -198,8 +200,8 @@ describe("console store", () => {
     const s = createConsoleStore();
     s.getState().setDataSource(ds);
     s.getState().setCrews([
-      { id: "A", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 },
-      { id: "B", authority_id: "x", name: "Crew B", shift_minutes: 420, repairs_per_shift: 8 },
+      { id: "A", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 },
+      { id: "B", authority_id: "x", name: "Crew B", shift_minutes: 420, repairs_per_shift: 8, depot_lng: -0.1246, depot_lat: 51.4994 },
     ]);
     s.getState().upsertPothole(base);
     s.getState().toggleSelected("a");
@@ -220,7 +222,7 @@ describe("console store", () => {
     });
     const s = createConsoleStore();
     s.getState().setDataSource(ds);
-    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 }]);
     s.getState().upsertPothole(base);
     s.getState().toggleSelected("a");
     await s.getState().planRoute();
@@ -237,7 +239,7 @@ describe("console store", () => {
     const ds = fakeDs({ planRoute });
     const s = createConsoleStore();
     s.getState().setDataSource(ds);
-    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 }]);
     s.getState().upsertPothole(base);
     s.getState().toggleSelected("a");
     await s.getState().planRoute();
@@ -258,7 +260,7 @@ describe("console store", () => {
 
   it("planRoute failure prefers the server's own sentence, and falls back when there is none", async () => {
     const s = createConsoleStore();
-    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 }]);
 
     // /api/plan-route answers one plain sentence; it is more use than the fallback.
     s.getState().setDataSource(fakeDs({ planRoute: vi.fn(async () => { throw new Error("That crew was not found."); }) }));
@@ -274,7 +276,7 @@ describe("console store", () => {
 
   it("dispatch keeps the result, so the confirmation can say whether an email went out", async () => {
     const s = createConsoleStore();
-    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 }]);
     s.getState().setDataSource(fakeDs({
       dispatch: vi.fn(async () => ({ sent: false, crewPage: "http://localhost:3000/route/r1" })),
     }));
@@ -296,7 +298,7 @@ describe("console store", () => {
 
   it("dispatch failure prefers the server's own sentence, and falls back when there is none", async () => {
     const s = createConsoleStore();
-    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 }]);
     s.getState().setDataSource(fakeDs({
       dispatch: vi.fn(async () => { throw new Error("That route plan was not found."); }),
     }));
@@ -356,7 +358,7 @@ describe("console store", () => {
     const ds = fakeDs();
     const s = createConsoleStore();
     s.getState().setDataSource(ds);
-    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 }]);
     s.getState().upsertPothole(p({ id: "near", lng: DEPOT[0] + 0.001, lat: DEPOT[1] }));
     s.getState().upsertPothole(p({ id: "far", lng: DEPOT[0] + 0.1, lat: DEPOT[1] }));
     s.getState().upsertPothole(p({ id: "closer-but-repaired", status: "repaired", lng: DEPOT[0], lat: DEPOT[1] }));
@@ -372,7 +374,7 @@ describe("console store", () => {
     const ds = fakeDs();
     const s = createConsoleStore();
     s.getState().setDataSource(ds);
-    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 }]);
     s.getState().upsertPothole(p({ id: "r", status: "repaired" }));
     await s.getState().planNearest();
     expect(ds.planRoute).not.toHaveBeenCalled();
@@ -384,7 +386,7 @@ describe("console store", () => {
     const ds = fakeDs();
     const s = createConsoleStore();
     s.getState().setDataSource(ds);
-    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12 }]);
+    s.getState().setCrews([{ id: "c1", authority_id: "x", name: "Crew A", shift_minutes: 480, repairs_per_shift: 12, depot_lng: -0.1246, depot_lat: 51.4994 }]);
     s.getState().upsertPothole(base);
     s.getState().toggleSelected("a");
 

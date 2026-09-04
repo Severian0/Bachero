@@ -291,9 +291,25 @@ button { font: inherit; color: inherit; }
   white-space: nowrap;
 }
 
+.hdr-settings {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  color: var(--rail-ink-2);
+  border: 1px solid var(--rail-rule);
+  border-radius: var(--r-md);
+  background: var(--rail-2);
+  transition: background 120ms linear, color 120ms linear;
+}
+@media (hover: hover) { .hdr-settings:hover { background: var(--rail-3); color: var(--rail-ink); } }
+.hdr-settings:active { background: var(--rail-3); color: var(--rail-ink); }
 .col-metrics { display: grid; }
 .col-heading { display: flex; }
 .hdr-operator-text { display: grid; }
+.hdr-operator { display: flex; }
+.settings-back-short { display: none; }
 .col-chips { display: flex; gap: 6px; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--rule-soft); }
 .chip { flex: 1; height: 30px; }
 .col-list { overflow-y: auto; min-height: 0; }
@@ -408,7 +424,7 @@ button { font: inherit; color: inherit; }
   }
   .console-header { padding-top: env(safe-area-inset-top); }
   .console-header { padding-left: var(--s3); padding-right: var(--s3); }
-  .hdr-tagline, .hdr-clock, .hdr-operator-text, .hdr-reporting, .hdr-scanned { display: none; }
+  .hdr-tagline, .hdr-clock, .hdr-operator-text, .hdr-operator, .hdr-reporting, .hdr-scanned { display: none; }
   .hdr-feed-words {
     position: absolute;
     width: 1px;
@@ -465,6 +481,40 @@ button { font: inherit; color: inherit; }
     padding: var(--s3) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom));
   }
   .sheet-foot .btn:only-child { grid-column: 1 / -1; }
+}
+
+/* -- Settings ---------------------------------------------------------------
+   One page, at /settings: the crews and their depots. A column of records and
+   a form beside a map to place depots on; on a phone the map goes on top. */
+.settings-frame {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: var(--console-header-h) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--canvas);
+  overflow: hidden;
+}
+.settings-main { display: grid; grid-template-columns: 440px minmax(0, 1fr); min-height: 0; }
+.settings-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  border-right: 1px solid var(--rule);
+  background: var(--surface);
+}
+.settings-scroll { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.settings-map { position: relative; min-width: 0; overflow: hidden; background: var(--canvas); }
+.settings-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.settings-actions { display: flex; gap: var(--s2); }
+.crew-row { display: grid; gap: var(--s1); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--rule-soft); }
+.crew-row[data-editing] { background: var(--action-soft); box-shadow: inset 3px 0 0 var(--action); }
+@media (max-width: 1023px) {
+  .settings-frame { grid-template-rows: calc(var(--console-header-h) + env(safe-area-inset-top)) minmax(0, 1fr); }
+  .settings-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: 38dvh minmax(0, 1fr); }
+  .settings-map { order: -1; }
+  .settings-column { border-right: 0; border-top: 1px solid var(--rule); }
+  .settings-scroll { padding-bottom: env(safe-area-inset-bottom); }
+  .settings-back-short { display: inline; }
 }
 
 /* Landscape phone: back to two columns, the panel full height beside the map.

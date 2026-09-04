@@ -117,3 +117,18 @@ describe("synthetic source", () => {
     vi.useRealTimers();
   });
 });
+
+describe("synthetic crews", () => {
+  it("adds, edits and deletes a crew, and the next source sees it", async () => {
+    const a = createSyntheticSource();
+    const before = (await a.load()).crews.length;
+    const made = await a.saveCrew({ name: "Crew Z", depot_lng: -0.1, depot_lat: 51.5, shift_minutes: 400, repairs_per_shift: 9 });
+    expect(made).toMatchObject({ name: "Crew Z", depot_lng: -0.1, depot_lat: 51.5 });
+    const edited = await a.saveCrew({ id: made.id, name: "Crew Z2", depot_lng: -0.2, depot_lat: 51.6, shift_minutes: 400, repairs_per_shift: 9 });
+    expect(edited.id).toBe(made.id);
+    expect((await createSyntheticSource().load()).crews.find((c) => c.id === made.id)?.name).toBe("Crew Z2");
+    await a.deleteCrew(made.id);
+    expect((await a.load()).crews).toHaveLength(before);
+    await expect(a.deleteCrew(made.id)).rejects.toThrow("not found");
+  });
+});
