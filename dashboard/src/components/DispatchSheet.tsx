@@ -148,17 +148,9 @@ export default function DispatchSheet() {
   return (
     <div
       role="presentation"
-      onMouseDown={(e) => {
+      className="sheet-scrim"
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) close();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 200,
-        display: "grid",
-        placeItems: "center",
-        padding: "var(--s5)",
-        background: "rgb(11 12 12 / 0.55)",
       }}
     >
       <div
@@ -166,17 +158,7 @@ export default function DispatchSheet() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="dispatch-title"
-        style={{
-          width: "min(560px, 100%)",
-          maxHeight: "100%",
-          display: "grid",
-          gridTemplateRows: "auto minmax(0,1fr) auto",
-          background: "var(--surface)",
-          borderRadius: "var(--r-lg)",
-          boxShadow: "var(--shadow-3)",
-          animation: "bch-rise 200ms var(--ease) both",
-          overflow: "hidden",
-        }}
+        className="sheet"
       >
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--s4)", padding: "var(--s4) var(--s5)", borderBottom: "1px solid var(--rule-soft)" }}>
           <div>
@@ -198,7 +180,7 @@ export default function DispatchSheet() {
           </button>
         </div>
 
-        <div style={{ overflowY: "auto", padding: "var(--s4) var(--s5)", display: "grid", gap: "var(--s4)", alignContent: "start" }}>
+        <div className="sheet-body">
           {sent ? (
             <>
               <dl style={{ margin: 0, display: "grid", gap: "var(--s2)" }}>
@@ -294,7 +276,7 @@ export default function DispatchSheet() {
                     </div>
                     {startAnchor.kind === "pothole" && (
                       <select
-                        style={INPUT}
+                        className="input"
                         aria-label="Start pothole"
                         value={startAnchor.id}
                         onChange={(e) => setStartAnchor({ kind: "pothole", id: e.target.value })}
@@ -325,7 +307,7 @@ export default function DispatchSheet() {
                     </div>
                     {endAnchor.kind === "pothole" && (
                       <select
-                        style={INPUT}
+                        className="input"
                         aria-label="End pothole"
                         value={endAnchor.id}
                         onChange={(e) => setEndAnchor({ kind: "pothole", id: e.target.value })}
@@ -348,9 +330,9 @@ export default function DispatchSheet() {
                           type="button"
                           aria-pressed={on}
                           onClick={() => setPlanner({ mode: m.key })}
+                          className="seg"
                           style={{
                             flex: 1,
-                            height: 30,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -375,8 +357,8 @@ export default function DispatchSheet() {
                       <Field label="Stops">
                         <input
                           key={`stops-${planner.crewId ?? "none"}`}
-                          className="data"
-                          style={INPUT}
+                          
+                          className="data input"
                           type="number"
                           min={1}
                           max={50}
@@ -389,8 +371,8 @@ export default function DispatchSheet() {
                       <Field label="Minutes">
                         <input
                           key={`minutes-${planner.crewId ?? "none"}`}
-                          className="data"
-                          style={INPUT}
+                          
+                          className="data input"
                           type="number"
                           min={30}
                           step={30}
@@ -402,8 +384,8 @@ export default function DispatchSheet() {
                     <Field label="Minutes per stop">
                       <input
                         key={`service-${planner.crewId ?? "none"}`}
-                        className="data"
-                        style={INPUT}
+                        
+                        className="data input"
                         type="number"
                         min={5}
                         step={5}
@@ -462,7 +444,7 @@ export default function DispatchSheet() {
                         borderBottom: i === rows.length - 1 ? "none" : "1px solid var(--rule-soft)",
                       }}
                     >
-                      <span className="data" style={{ width: 22, height: 22, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: "var(--r-sm)", background: "var(--action)", color: "var(--action-ink)", fontSize: 11, fontWeight: 700 }}>
+                      <span className="data" style={{ width: 22, height: 22, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: "var(--r-sm)", background: "var(--action)", color: "var(--action-ink)", fontSize: "var(--t-micro)", fontWeight: 700 }}>
                         {r.order}
                       </span>
                       <span style={{ flex: 1, minWidth: 0 }}>
@@ -470,13 +452,13 @@ export default function DispatchSheet() {
                           {r.pothole ? displayName(r.pothole) : "Record not loaded"}
                         </span>
                         {r.pothole && (
-                          <span className="secondary" style={{ display: "block", fontSize: 11 }}>
+                          <span className="secondary" style={{ display: "block", fontSize: "var(--t-micro)" }}>
                             <span className="data">{r.pothole.ref}</span>, {SEVERITY_WORD[severityGrade(r.pothole.severity)].toLowerCase()}, {STATUS_VISUAL[r.pothole.status].label.toLowerCase()}
                           </span>
                         )}
                       </span>
                       {r.eta && (
-                        <span className="data secondary" style={{ fontSize: 11 }}>
+                        <span className="data secondary" style={{ fontSize: "var(--t-micro)" }}>
                           eta {hhmm(r.eta)}
                         </span>
                       )}
@@ -503,7 +485,7 @@ export default function DispatchSheet() {
               {planned && (
                 <Field label="Crew email">
                   <input
-                    style={INPUT}
+                    className="input"
                     type="text"
                     placeholder="crew@council.gov.uk, second@council.gov.uk"
                     value={to}
@@ -526,7 +508,7 @@ export default function DispatchSheet() {
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--s2)", padding: "var(--s3) var(--s5)", borderTop: "1px solid var(--rule-soft)", background: "var(--canvas)" }}>
+        <div className="sheet-foot">
           {sent ? (
             <button type="button" className="btn btn-primary" onClick={close}>
               Back to the queue
@@ -573,16 +555,6 @@ export default function DispatchSheet() {
   );
 }
 
-const INPUT: React.CSSProperties = {
-  width: "100%",
-  height: 38,
-  padding: "0 var(--s3)",
-  fontSize: "var(--t-small)",
-  color: "var(--ink)",
-  background: "var(--surface)",
-  border: "1px solid var(--rule)",
-  borderRadius: "var(--r-md)",
-};
 
 /** One segmented choice, styled as the planning-mode buttons above it. */
 function Dial(
@@ -594,9 +566,9 @@ function Dial(
       aria-pressed={on}
       disabled={disabled}
       onClick={onClick}
+      className="seg"
       style={{
         flex: 1,
-        height: 30,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

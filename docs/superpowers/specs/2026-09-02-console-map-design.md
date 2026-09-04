@@ -396,5 +396,6 @@ Vitest with `environment: node` for `lib/` and a `jsdom` project for the store.
 ## 12. Out of scope
 
 The solver route handler's OSRM calls and database writes, the dispatch email, the crew
-page, mobile layout, dark mode, clustering pins at low zoom, snapping synthetic points to
-roads, and any authentication.
+page, dark mode, clustering pins at low zoom, snapping synthetic points to roads, and any
+authentication. Mobile layout was out of scope here and is specified in
+`2026-09-04-mobile-console-design.md`.

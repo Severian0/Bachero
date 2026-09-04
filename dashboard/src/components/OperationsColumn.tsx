@@ -66,9 +66,13 @@ export default function OperationsColumn({
   // offset, never by yanking the page.
   useEffect(() => {
     if (!linkedId || !listRef.current) return;
-    listRef.current
-      .querySelector<HTMLElement>(`[data-row="${linkedId}"]`)
-      ?.scrollIntoView({ block: "nearest" });
+    const list = listRef.current;
+    const row = list.querySelector<HTMLElement>(`[data-row="${linkedId}"]`);
+    if (!row) return;
+    // scrollIntoView would also scroll the page on a phone; move only the list.
+    const top = row.offsetTop - list.offsetTop;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (top + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = top + row.offsetHeight - list.clientHeight;
   }, [linkedId]);
 
   const n = routeIds.size;
@@ -76,14 +80,14 @@ export default function OperationsColumn({
   return (
     <div style={{ display: "grid", gridTemplateRows: "auto auto auto minmax(0,1fr) auto", minHeight: 0, background: "var(--surface)" }}>
       {/* Measurements, each attached to the thing it measures. */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", borderBottom: "1px solid var(--rule-soft)" }}>
+      <div className="col-metrics" style={{ gridTemplateColumns: "repeat(3, 1fr)", borderBottom: "1px solid var(--rule-soft)" }}>
         <Metric value={String(counts.confirmed)} label="Confirmed, awaiting a route" tone="action" />
         <Metric value={String(counts.suspected)} label="Suspected, one vehicle" />
         <Metric value={kmToday.toFixed(0)} unit="km" label="Network scanned today" last />
       </div>
 
       {/* Filter chips. These filter the map as well as the list. */}
-      <div role="group" aria-label="Filter the repair queue" style={{ display: "flex", gap: 6, padding: "var(--s3) var(--s4)", borderBottom: "1px solid var(--rule-soft)" }}>
+      <div role="group" aria-label="Filter the repair queue" className="col-chips">
         {FILTER_CYCLE.map((key) => {
           const on = filter === key;
           return (
@@ -92,9 +96,8 @@ export default function OperationsColumn({
               type="button"
               aria-pressed={on}
               onClick={() => onFilter(key)}
+              className="chip"
               style={{
-                flex: 1,
-                height: 30,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -110,7 +113,7 @@ export default function OperationsColumn({
               }}
             >
               {FILTER_LABELS[key]}
-              <span className="data" style={{ fontSize: 11, opacity: on ? 0.85 : 0.6 }}>
+              <span className="data" style={{ fontSize: "var(--t-micro)", opacity: on ? 0.85 : 0.6 }}>
                 {counts[key]}
               </span>
             </button>
@@ -118,14 +121,14 @@ export default function OperationsColumn({
         })}
       </div>
 
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "var(--s2) var(--s4)", borderBottom: "1px solid var(--rule-soft)", background: "var(--canvas)" }}>
+      <div className="col-heading" style={{ alignItems: "baseline", justifyContent: "space-between", padding: "var(--s2) var(--s4)", borderBottom: "1px solid var(--rule-soft)", background: "var(--canvas)" }}>
         <h2 className="micro">Repair queue</h2>
         <p className="secondary" style={{ margin: 0, fontSize: "var(--t-small)" }}>
           {rows.length} shown, highest priority first
         </p>
       </div>
 
-      <div ref={listRef} style={{ overflowY: "auto", minHeight: 0 }}>
+      <div ref={listRef} className="col-list">
         {loadState === "error" ? (
           <div style={{ display: "grid", gap: "var(--s3)", justifyItems: "start", padding: "var(--s5) var(--s4)" }}>
             <p className="secondary" style={{ margin: 0, fontSize: "var(--t-small)" }}>
@@ -166,7 +169,7 @@ export default function OperationsColumn({
       </div>
 
       {/* The route bar always states what is committed and what it costs. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--s3)", padding: "var(--s3) var(--s4)", borderTop: "1px solid var(--rule)", background: "var(--canvas)" }}>
+      <div className="col-bar">
         <div style={{ minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: "var(--t-small)", fontWeight: 600 }}>
             {planned
@@ -200,6 +203,7 @@ function Clear({ onClearRoute }: { onClearRoute: () => void }) {
   return (
     <button
       type="button"
+      className="route-clear"
       onClick={onClearRoute}
       style={{ border: 0, background: "none", padding: 0, color: "var(--action)", fontWeight: 600, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
     >
@@ -227,8 +231,9 @@ function QueueRow({
     <li data-row={pothole.id}>
       <button
         type="button"
-        onMouseEnter={() => onLink(pothole.id)}
-        onMouseLeave={() => onLink(null)}
+        // A finger has no hover: a touch never links, it opens. Mouse and pen keep it.
+        onPointerEnter={(e) => { if (e.pointerType !== "touch") onLink(pothole.id); }}
+        onPointerLeave={(e) => { if (e.pointerType !== "touch") onLink(null); }}
         onFocus={() => onLink(pothole.id)}
         onBlur={() => onLink(null)}
         onClick={() => onOpen(pothole.id)}
@@ -254,7 +259,7 @@ function QueueRow({
             <span style={{ fontSize: "var(--t-body)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {displayName(pothole)}
             </span>
-            <span className="data secondary" style={{ fontSize: 11, flexShrink: 0 }}>
+            <span className="data secondary" style={{ fontSize: "var(--t-micro)", flexShrink: 0 }}>
               {pothole.ref}
             </span>
           </span>

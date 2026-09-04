@@ -42,6 +42,11 @@ export interface ConsoleState {
   filter: Filter;
   /** The dispatch sheet, the one thing on this screen that interrupts. */
   sheetOpen: boolean;
+  /**
+   * Which of the two the phone panel shows when no record is open: the
+   * queue, or just its handle so the map has the height. Desktop ignores it.
+   */
+  panel: "queue" | "map";
 
   planner: PlannerConfig;
   planState: "idle" | "planning" | "planned" | "error";
@@ -85,6 +90,9 @@ export interface ConsoleActions {
   unlink(): void;
   pin(id: string): void;
   unpin(): void;
+  /** Close the record and drop the link with it: the touch "back". */
+  closeRecord(): void;
+  setPanel(panel: ConsoleState["panel"]): void;
   toggleSelected(id: string): void;
   clearSelection(): void;
   setFilter(f: Filter): void;
@@ -145,6 +153,7 @@ export function createConsoleStore() {
       loadState: "loading",
       linkedId: null, pinnedId: null, selected: [], filter: "all",
       sheetOpen: false,
+      panel: "queue",
       planner: {
         crewId: null, mode: "manual", maxStops: 12, timeBudgetMin: 480, serviceMinPerStop: 20,
         planDate: tomorrowISO(),
@@ -220,6 +229,8 @@ export function createConsoleStore() {
         void get().loadDetections(id);
       },
       unpin() { set({ pinnedId: null }); },
+      closeRecord() { set({ pinnedId: null, linkedId: null }); },
+      setPanel(panel) { set({ panel }); },
       toggleSelected(id) {
         const p = get().potholes[id];
         if (!p || !isSelectable(p)) return;

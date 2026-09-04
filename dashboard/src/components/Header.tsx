@@ -19,24 +19,17 @@ export default function Header({
   kmToday,
   reporting,
   loading,
+  inert,
 }: {
   live: boolean;
   kmToday: number;
   reporting: number;
   loading: boolean;
+  /** While the dispatch sheet is open the bar is behind it and takes no focus. */
+  inert?: boolean;
 }) {
   return (
-    <header
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: "var(--s4)",
-        padding: "0 var(--s4) 0 var(--s5)",
-        background: "var(--rail)",
-        color: "var(--rail-ink)",
-      }}
-    >
+    <header className="console-header" inert={inert}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--s4)", minWidth: 0 }}>
         <h1 style={{ display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
           <span style={{ color: "var(--rail-ink)", ["--mark-void" as string]: "var(--rail)", display: "flex" }}>
@@ -54,8 +47,9 @@ export default function Header({
             Bachero
           </span>
         </h1>
-        <Rule />
+        <Rule className="hdr-tagline" />
         <p
+          className="hdr-tagline"
           style={{
             margin: 0,
             fontSize: "var(--t-small)",
@@ -74,17 +68,17 @@ export default function Header({
         <FeedState live={live} loading={loading} />
         <Rule />
         <Stats kmToday={kmToday} reporting={reporting} loading={loading} />
-        <Rule />
+        <Rule className="hdr-clock" />
         <Clock />
-        <Rule />
+        <Rule className="hdr-clock" />
         <Operator />
       </div>
     </header>
   );
 }
 
-function Rule() {
-  return <span aria-hidden style={{ width: 1, height: 22, background: "var(--rail-rule)", flexShrink: 0 }} />;
+function Rule({ className }: { className?: string }) {
+  return <span aria-hidden className={className} style={{ width: 1, height: 22, background: "var(--rail-rule)", flexShrink: 0 }} />;
 }
 
 /**
@@ -108,7 +102,7 @@ function FeedState({ live, loading }: { live: boolean; loading: boolean }) {
           animation: live ? "bch-pulse 2.4s ease-in-out infinite" : undefined,
         }}
       />
-      {loading ? null : live ? "Detector feed live" : "Synthetic fleet, backend not connected"}
+      <span className="hdr-feed-words">{loading ? null : live ? "Detector feed live" : "Synthetic fleet, backend not connected"}</span>
     </p>
   );
 }
@@ -123,9 +117,9 @@ function Stats({ kmToday, reporting, loading }: { kmToday: number; reporting: nu
   return (
     <div style={{ display: "grid", lineHeight: 1.3 }}>
       <span className="data" style={{ fontSize: "var(--t-small)", color: "var(--rail-ink-2)" }}>
-        {loading ? " " : `${km(kmToday)} scanned today`}
+        {loading ? " " : <>{km(kmToday)} <span className="hdr-scanned">scanned </span>today</>}
       </span>
-      <span style={{ fontSize: 11, color: "var(--rail-ink-2)" }}>
+      <span className="hdr-reporting" style={{ fontSize: "var(--t-micro)", color: "var(--rail-ink-2)" }}>
         {loading ? " " : `${plural(reporting, "vehicle")} reporting`}
       </span>
     </div>
@@ -150,7 +144,7 @@ function Clock() {
   }, []);
 
   return (
-    <p className="data" style={{ margin: 0, fontSize: "var(--t-small)", color: "var(--rail-ink-2)", whiteSpace: "nowrap", minWidth: 118 }}>
+    <p className="data hdr-clock" style={{ margin: 0, fontSize: "var(--t-small)", color: "var(--rail-ink-2)", whiteSpace: "nowrap", minWidth: 118 }}>
       {now ?? " "}
     </p>
   );
@@ -178,7 +172,7 @@ function Operator() {
           border: "1px solid var(--rail-rule)",
           display: "grid",
           placeItems: "center",
-          fontSize: 11,
+          fontSize: "var(--t-micro)",
           fontWeight: 700,
           letterSpacing: "0.04em",
           color: "var(--rail-ink)",
@@ -187,9 +181,9 @@ function Operator() {
       >
         {initials}
       </span>
-      <span style={{ display: "grid", lineHeight: 1.3 }}>
+      <span className="hdr-operator-text" style={{ lineHeight: 1.3 }}>
         <span style={{ fontSize: "var(--t-small)", fontWeight: 600 }}>{OPERATOR.name}</span>
-        <span style={{ fontSize: 11, color: "var(--rail-ink-2)" }}>{AUTHORITY}</span>
+        <span style={{ fontSize: "var(--t-micro)", color: "var(--rail-ink-2)" }}>{AUTHORITY}</span>
       </span>
     </div>
   );

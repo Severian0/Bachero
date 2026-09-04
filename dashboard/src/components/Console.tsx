@@ -34,6 +34,7 @@ export default function Console() {
   const pinnedId = useConsole((s) => s.pinnedId);
   const selected = useConsole((s) => s.selected);
   const sheetOpen = useConsole((s) => s.sheetOpen);
+  const panel = useConsole((s) => s.panel);
   const planner = useConsole((s) => s.planner);
   const planState = useConsole((s) => s.planState);
   const plan = useConsole((s) => s.plan);
@@ -44,7 +45,8 @@ export default function Console() {
   const link = useConsole((s) => s.link);
   const unlink = useConsole((s) => s.unlink);
   const pin = useConsole((s) => s.pin);
-  const unpin = useConsole((s) => s.unpin);
+  const closeRecord = useConsole((s) => s.closeRecord);
+  const setPanel = useConsole((s) => s.setPanel);
   const toggleSelected = useConsole((s) => s.toggleSelected);
   const clearSelection = useConsole((s) => s.clearSelection);
   const setFilter = useConsole((s) => s.setFilter);
@@ -168,24 +170,39 @@ export default function Console() {
   }, []);
 
   return (
-    <div style={{ height: "100dvh", display: "grid", gridTemplateRows: "56px minmax(0,1fr)", background: "var(--canvas)", overflow: "hidden" }}>
+    <div className="console-frame">
       <Header
+        inert={sheetOpen}
         live={isSupabaseConfigured() && loadState === "ready"}
         kmToday={kmToday}
         reporting={reporting}
         loading={loadState === "loading"}
       />
 
-      <main style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 396px", minHeight: 0 }}>
+      <main className="console-main" inert={sheetOpen}>
         <PotholeMap />
 
-        <aside style={{ display: "grid", minHeight: 0, borderLeft: "1px solid var(--rule)", background: "var(--surface)" }}>
+        {/* On a phone the column is a panel under the map. The handle is its
+            first row (0px on desktop): what it holds, and one button to give
+            the map the height back. A record open always takes the panel. */}
+        <aside className="console-aside" data-panel={opened ? "record" : panel}>
+          <div className="panel-handle">
+            <h2 className="micro">Repair queue</h2>
+            <p className="secondary" style={{ margin: 0, fontSize: "var(--t-small)", flex: 1 }}>
+              {opened ? "1 record open" : `${rows.length} shown`}
+            </p>
+            {!opened && (
+              <button type="button" className="btn btn-quiet btn-sm" onClick={() => setPanel(panel === "map" ? "queue" : "map")}>
+                {panel === "map" ? "Show queue" : "Show map"}
+              </button>
+            )}
+          </div>
           {opened ? (
             <RecordPanel
               pothole={opened}
               detections={detections[opened.id]}
               onRoute={routeIds.has(opened.id)}
-              onBack={unpin}
+              onBack={closeRecord}
               onToggleRoute={() => toggleSelected(opened.id)}
               onDismiss={() => dismiss(opened.id)}
             />
@@ -218,43 +235,11 @@ export default function Console() {
       {sheetOpen && <DispatchSheet />}
 
       {pendingDismiss && (
-        <div
-          role="status"
-          style={{
-            position: "fixed",
-            left: "var(--s5)",
-            bottom: "var(--s5)",
-            zIndex: 150,
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--s4)",
-            padding: "var(--s2) var(--s2) var(--s2) var(--s4)",
-            background: "var(--rail)",
-            color: "var(--rail-ink)",
-            borderRadius: "var(--r-md)",
-            boxShadow: "var(--shadow-2)",
-            animation: "bch-rise 180ms var(--ease) both",
-            overflow: "hidden",
-          }}
-        >
+        <div role="status" className="undo-toast">
           <p style={{ margin: 0, fontSize: "var(--t-small)" }}>
             {displayName(pendingDismiss.previous)} dismissed as a false positive.
           </p>
-          <button
-            type="button"
-            onClick={undoDismiss}
-            style={{
-              border: "1px solid var(--rail-rule)",
-              background: "var(--rail-2)",
-              color: "var(--rail-ink)",
-              height: 30,
-              padding: "0 var(--s3)",
-              borderRadius: "var(--r-md)",
-              fontSize: "var(--t-small)",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
+          <button type="button" className="toast-undo" onClick={undoDismiss}>
             Undo
           </button>
           <UndoBar key={pendingDismiss.id} expiresAt={pendingDismiss.expiresAt} />

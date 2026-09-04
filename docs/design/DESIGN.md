@@ -190,6 +190,28 @@ One screen, at `/`. `100dvh`, no page scroll, `--canvas` ground.
   in place; nothing slides in over the map.
 - Queue rows are `min-height: 58px`. Buttons are 38px, `.btn-sm` 30px, tags 22px.
 
+### The frame on a phone
+
+Below 1024px (`@media (max-width: 1023px)`) the same screen stacks into three rows: the
+header, the map, and the column as a panel under it. The panel is a real row, never a sheet
+over the map, so no pin can hide under it and the map needs no padding maths.
+
+- The panel's height follows `aside[data-panel]`: `queue` is `--console-panel-h` (50dvh),
+  `record` is `--console-record-h` (66dvh), `map` is the 44px handle and the route bar only.
+  The handle names what it holds ("Repair queue · 30 shown") and carries one button, **Show
+  map** / **Show queue**. A record open always takes the panel; Back returns it.
+- Hidden on the phone: the tagline, clock, operator text and "vehicles reporting" in the
+  header (the feed sentence stays for screen readers), the metrics strip and the queue heading
+  (the km figure is in the header, the counts are on the chips). The chips become one
+  horizontally scrolling row. Height changes are instant; nothing animates.
+- Landscape phones (`max-height: 520px`) go back to two columns, the panel full height beside
+  the map with no handle.
+- `(pointer: coarse)`, at any width: `.btn-sm`, chips and the sheet's segmented buttons grow to
+  38px, inputs set 17px type so iOS does not zoom, and the zoom cluster is hidden (pinch and
+  double-tap zoom). Pins keep their 14–26px visuals inside the 44px hit box.
+- The viewport is `viewport-fit: cover`; the safe-area insets are read by the header, the
+  route bar, the record footer and the sheet footer, and nowhere else.
+
 ---
 
 ## 4. Components
@@ -317,10 +339,6 @@ marker, not a trail dot.
 square with a 1.5px `--rail` border. Each stop is a 16px `--committed` square carrying its
 number in `--rail-ink`: the line is the proposal, the numbered stops are the commitment.
 
-**Plan area** — a rectangle drawn by shift-dragging: `--action` fill at 8% with a 1px
-`--action` outline. The draft rectangle under the cursor is painted the same way, so nothing
-changes appearance on release.
-
 **Chrome** — zoom in/out and **Fit network** top-right; the key bottom-left, listing the four
 visible states with a note that marker size shows severity; the MapLibre scale bar and
 attribution restyled to the tokens in `globals.css`.
@@ -419,17 +437,18 @@ in `dashboard/src/lib/console/keyboard.ts`.
 
 Keys are ignored while focus is in an `input`, `textarea` or `select`. The screen's listener
 stands down entirely while the dispatch sheet is open (it is modal and runs its own keys,
-including a focus trap on `Tab`) and while a shift-drag is in progress (Escape belongs to the
-drag).
+including a focus trap on `Tab`).
 
-### Shift-drag: the plan area
+### Touch
 
-Shift and drag on the map draws a rectangle. On release it becomes the planner's area and
-switches the planning mode from *Pick these* to *Best N* — an area is a statement about where,
-so the console stops asking the operator to also say which. Nothing opens on release: the
-column's bottom bar reports the switch as "Area drawn · N in area · Best N" with a Clear
-beside it, and the sheet states the same area when it is next opened. Escape during the drag
-cancels it.
+A finger has no hover, so there is no "linked but not open" state on touch: a tap on a pin or
+a row opens the record, and the open record is the linked one. Hover handlers are pointer
+events that ignore `pointerType === "touch"`, so mouse and pen keep hover and the desktop is
+unchanged. The record's Back button closes the record and drops the link with it
+(`closeRecord()`), a tap on empty map drops a stale link, and the route bar's Clear, the
+filter chips and the sheet's close button replace the rest of the Escape ladder. Two-finger
+rotate and pitch are off: north stays up. Hover tints are wrapped in `(hover: hover)` and have
+`:active` twins so a tapped control does not stay tinted.
 
 ### The record panel
 

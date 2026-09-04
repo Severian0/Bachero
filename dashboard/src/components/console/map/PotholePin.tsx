@@ -35,8 +35,9 @@ export function PotholePin({ p }: { p: Pothole }) {
       <button
         type="button"
         aria-label={`${displayName(p)}, ${p.ref}. ${v.label}, severity ${grade} of 4. Open record.`}
-        onMouseEnter={() => link(p.id)}
-        onMouseLeave={() => unlink()}
+        // A finger has no hover: a touch never links, it opens. Mouse and pen keep it.
+        onPointerEnter={(e) => { if (e.pointerType !== "touch") link(p.id); }}
+        onPointerLeave={(e) => { if (e.pointerType !== "touch") unlink(); }}
         onFocus={() => link(p.id)}
         onBlur={() => unlink()}
         onClick={(e) => { e.stopPropagation(); pin(p.id); }}
@@ -64,7 +65,7 @@ export function PotholePin({ p }: { p: Pothole }) {
           }}
         >
           {p.stop_order != null && (
-            <span className="data" style={{ fontSize: 10, fontWeight: 700, lineHeight: 1, color: "var(--rail-ink)" }}>
+            <span className="data" style={{ fontSize: "var(--t-micro)", fontWeight: 700, lineHeight: 1, color: "var(--rail-ink)" }}>
               {p.stop_order}
             </span>
           )}

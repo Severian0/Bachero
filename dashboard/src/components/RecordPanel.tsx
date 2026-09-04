@@ -161,7 +161,7 @@ export default function RecordPanel({
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: "var(--s2)", padding: "var(--s3) var(--s4)", borderTop: "1px solid var(--rule)", background: "var(--canvas)" }}>
+      <div className="record-foot">
         {canRoute ? (
           <button
             type="button"

@@ -49,6 +49,25 @@ describe("console store", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
+  it("panel defaults to the queue and can show the map", () => {
+    const s = createConsoleStore();
+    expect(s.getState().panel).toBe("queue");
+    s.getState().setPanel("map");
+    expect(s.getState().panel).toBe("map");
+  });
+
+  it("closeRecord drops the link as well as the record; unpin keeps it", () => {
+    const s = createConsoleStore();
+    s.getState().setAll([p({ id: "a" })]);
+    s.getState().pin("a");
+    s.getState().unpin();
+    expect(s.getState().linkedId).toBe("a");
+    s.getState().pin("a");
+    s.getState().closeRecord();
+    expect(s.getState().pinnedId).toBeNull();
+    expect(s.getState().linkedId).toBeNull();
+  });
+
   it("link, pin, unpin, unlink", () => {
     const s = createConsoleStore();
     s.getState().upsertPothole(base);

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMap } from "react-map-gl/maplibre";
-import { ConsoleMap, type MapStatus } from "./console/map/ConsoleMap";
+import { ConsoleMap, fitOptions, type MapStatus } from "./console/map/ConsoleMap";
 import { MapLayers } from "./console/map/MapLayers";
 import { useConsole } from "@/lib/console/store";
 import { STATUS_VISUAL } from "@/lib/console/visual";
@@ -20,6 +20,9 @@ import type { PotholeStatus } from "@/lib/types";
 export default function PotholeMap() {
   const unlink = useConsole((s) => s.unlink);
   const [status, setStatus] = useState<MapStatus>("loading");
+  // The key is always on the desk; on a phone it is behind a button, because
+  // a 360px map cannot spare the corner.
+  const [keyOpen, setKeyOpen] = useState(false);
 
   // A tile failure is not a data failure, and the operator should not assume
   // the console is down, so `failed` is sticky and `ready` never overrides it.
@@ -30,12 +33,22 @@ export default function PotholeMap() {
   return (
     <ConsoleMap
       onMapMouseLeave={unlink}
+      onMapClick={unlink}
       onStatus={onStatus}
       overlay={
         <>
-          <div style={{ position: "absolute", left: "var(--s4)", bottom: "var(--s4)", zIndex: 50, display: "grid", gap: "var(--s2)", justifyItems: "start" }}>
+          <div className="map-corner">
             <PlanNearestButton />
-            <Legend />
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm map-key-toggle"
+              aria-expanded={keyOpen}
+              onClick={() => setKeyOpen((o) => !o)}
+              style={{ boxShadow: "var(--shadow-1)" }}
+            >
+              {keyOpen ? "Hide key" : "Show key"}
+            </button>
+            <Legend open={keyOpen} />
           </div>
           {status !== "ready" && <MapStatusPanel status={status} />}
         </>
@@ -68,6 +81,9 @@ function PanToOpenRecord() {
     const p = potholes[pinnedId];
     if (!p) return;
     panned.current = pinnedId;
+    // On a phone the record has just taken height from the map; read the
+    // new size first so the pin lands in the centre of what is left.
+    map.resize();
     map.panTo([p.lng, p.lat]);
   }, [map, pinnedId, potholes]);
 
@@ -89,20 +105,16 @@ function MapControls() {
     const lats = pts.map((p) => p[1]);
     map.fitBounds(
       [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-      { padding: 40, maxZoom: 15 },
+      fitOptions(),
     );
   };
 
   return (
-    <div
-      style={{
-        position: "absolute", top: "var(--s4)", right: "var(--s4)", zIndex: 50,
-        display: "grid", gap: "var(--s2)", justifyItems: "end",
-      }}
-    >
+    <div className="map-controls">
       <div
+        className="map-zoom"
         style={{
-          display: "grid", background: "var(--surface)", border: "1px solid var(--rule)",
+          background: "var(--surface)", border: "1px solid var(--rule)",
           borderRadius: "var(--r-md)", boxShadow: "var(--shadow-1)", overflow: "hidden",
         }}
       >
@@ -188,9 +200,11 @@ const LEGEND: { status: PotholeStatus; note: string; size: number }[] = [
   { status: "repaired", note: "closed today", size: 14 },
 ];
 
-function Legend() {
+function Legend({ open }: { open: boolean }) {
   return (
     <div
+      className="map-key"
+      data-open={open ? "" : undefined}
       style={{
         padding: "var(--s3) var(--s4)",
         background: "var(--surface)",
@@ -261,6 +275,7 @@ function MapStatusPanel({ status }: { status: Exclude<MapStatus, "ready"> }) {
   return (
     <div
       role={covering ? undefined : "status"}
+      className={covering ? undefined : "map-notice"}
       style={{
         position: "absolute",
         inset: covering ? 0 : "var(--s4) auto auto 50%",

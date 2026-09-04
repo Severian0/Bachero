@@ -95,6 +95,13 @@
   --shadow-3: 0 16px 40px rgb(11 12 12 / 0.18), 0 2px 8px rgb(11 12 12 / 0.10);
 
   --ease: cubic-bezier(.2, .6, .2, 1);
+
+  /* -- Frame ---------------------------------------------------------------
+     Dimensions of the console frame itself. Below 1024px the column becomes
+     a panel under the map, sized as a share of the viewport.               */
+  --console-header-h: 56px;
+  --console-panel-h: 50dvh;
+  --console-record-h: 66dvh;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -109,6 +116,7 @@ html, body {
   font-size: var(--t-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
 }
 
 h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; line-height: 1.25; }
@@ -177,17 +185,21 @@ button { font: inherit; color: inherit; }
 .btn:disabled { cursor: not-allowed; }
 
 .btn-primary { background: var(--action); color: var(--action-ink); }
-.btn-primary:not(:disabled):hover { background: var(--action-hover); }
+@media (hover: hover) { .btn-primary:not(:disabled):hover { background: var(--action-hover); } }
+.btn-primary:not(:disabled):active { background: var(--action-hover); }
 .btn-primary:disabled { background: var(--canvas); color: var(--ink-2); border-color: var(--rule); }
 
 .btn-commit { background: var(--committed); color: #fff; }
-.btn-commit:not(:disabled):hover { background: #005a30; }
+@media (hover: hover) { .btn-commit:not(:disabled):hover { background: #005a30; } }
+.btn-commit:not(:disabled):active { background: #005a30; }
 
 .btn-secondary { border-color: var(--rule); color: var(--ink); background: var(--surface); }
-.btn-secondary:not(:disabled):hover { background: var(--canvas); border-color: var(--ink-2); }
+@media (hover: hover) { .btn-secondary:not(:disabled):hover { background: var(--canvas); border-color: var(--ink-2); } }
+.btn-secondary:not(:disabled):active { background: var(--canvas); border-color: var(--ink-2); }
 
 .btn-quiet { color: var(--ink-2); }
-.btn-quiet:not(:disabled):hover { background: var(--canvas); color: var(--ink); }
+@media (hover: hover) { .btn-quiet:not(:disabled):hover { background: var(--canvas); color: var(--ink); } }
+.btn-quiet:not(:disabled):active { background: var(--canvas); color: var(--ink); }
 
 .btn-sm { height: 30px; padding: 0 var(--s3); font-size: var(--t-micro); letter-spacing: 0.04em; }
 
@@ -230,3 +242,238 @@ button { font: inherit; color: inherit; }
 .maplibregl-ctrl-attrib a { color: var(--ink-2); }
 .maplibregl-map { font-family: var(--font-ui); }
 .maplibregl-marker { will-change: transform; z-index: 20; }
+
+/* -- Console frame ----------------------------------------------------------
+   The desktop frame: a rail across the top, the map on the left, a 396px
+   column on the right. Each class carries exactly what the component used to
+   set inline, so the phone rules further down can override it. */
+.console-frame {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: var(--console-header-h) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--canvas);
+  overflow: hidden;
+}
+.console-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  min-width: 0;
+  padding: 0 var(--s4) 0 var(--s5);
+  background: var(--rail);
+  color: var(--rail-ink);
+}
+.console-main { display: grid; grid-template-columns: minmax(0, 1fr) 396px; min-height: 0; }
+.console-map {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--canvas);
+  border-right: 1px solid var(--rule);
+}
+.console-aside {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  border-left: 1px solid var(--rule);
+  background: var(--surface);
+}
+.panel-handle { display: none; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.col-metrics { display: grid; }
+.col-heading { display: flex; }
+.hdr-operator-text { display: grid; }
+.col-chips { display: flex; gap: 6px; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--rule-soft); }
+.chip { flex: 1; height: 30px; }
+.col-list { overflow-y: auto; min-height: 0; }
+.col-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--rule);
+  background: var(--canvas);
+}
+.record-foot {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--rule);
+  background: var(--canvas);
+}
+
+.map-controls { position: absolute; top: var(--s4); right: var(--s4); z-index: 50; display: grid; gap: var(--s2); justify-items: end; }
+.map-corner { position: absolute; left: var(--s4); bottom: var(--s4); z-index: 50; display: grid; gap: var(--s2); justify-items: start; }
+.map-zoom { display: grid; }
+.map-key-toggle { display: none; }
+
+.undo-toast {
+  position: fixed;
+  left: var(--s5);
+  bottom: var(--s5);
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s2) var(--s2) var(--s2) var(--s4);
+  background: var(--rail);
+  color: var(--rail-ink);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  animation: bch-rise 180ms var(--ease) both;
+  overflow: hidden;
+}
+.toast-undo {
+  border: 1px solid var(--rail-rule);
+  background: var(--rail-2);
+  color: var(--rail-ink);
+  height: 30px;
+  padding: 0 var(--s3);
+  border-radius: var(--r-md);
+  font-size: var(--t-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: var(--s5);
+  background: rgb(11 12 12 / 0.55);
+}
+.sheet {
+  width: min(560px, 100%);
+  max-height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+  animation: bch-rise 200ms var(--ease) both;
+  overflow: hidden;
+}
+.sheet-body { overflow-y: auto; padding: var(--s4) var(--s5); display: grid; gap: var(--s4); align-content: start; }
+.sheet-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+  padding: var(--s3) var(--s5);
+  border-top: 1px solid var(--rule-soft);
+  background: var(--canvas);
+}
+.input {
+  width: 100%;
+  height: 38px;
+  padding: 0 var(--s3);
+  font-size: var(--t-small);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+}
+.seg { height: 30px; }
+
+/* -- Touch ------------------------------------------------------------------
+   A finger needs 38px; the desktop's 30px controls grow to the .btn height. */
+@media (pointer: coarse) {
+  .btn-sm, .chip, .seg, .toast-undo { height: 38px; }
+  .input { font-size: var(--t-lead); }
+  .route-clear { display: inline-flex; align-items: center; min-height: 38px; }
+  .map-zoom { display: none; }
+  ::-webkit-scrollbar { display: none; }
+}
+
+/* -- The frame on a phone ---------------------------------------------------
+   Three rows: rail, map, panel. The panel is a real row, never a sheet over
+   the map, so no pin can hide under it. Its height is set by the store:
+   queue, record, or handle-only when the operator wants the map. */
+@media (max-width: 1023px) {
+  .console-frame {
+    grid-template-rows: calc(var(--console-header-h) + env(safe-area-inset-top)) minmax(0, 1fr) auto;
+  }
+  .console-header { padding-top: env(safe-area-inset-top); }
+  .console-header { padding-left: var(--s3); padding-right: var(--s3); }
+  .hdr-tagline, .hdr-clock, .hdr-operator-text, .hdr-reporting, .hdr-scanned { display: none; }
+  .hdr-feed-words {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .console-main { display: contents; }
+  .console-map { border-right: 0; }
+  .console-aside { border-left: 0; border-top: 1px solid var(--rule); }
+  .console-aside[data-panel="queue"] { height: var(--console-panel-h); }
+  .console-aside[data-panel="record"] { height: var(--console-record-h); }
+  .console-aside[data-panel="map"] { height: auto; }
+  .console-aside[data-panel="map"] :is(.col-chips, .col-list) { display: none; }
+  .panel-handle {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    height: 44px;
+    padding: 0 var(--s4);
+    background: var(--canvas);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .col-metrics, .col-heading { display: none; }
+  .col-chips { overflow-x: auto; scrollbar-width: none; }
+  .chip { flex: 0 0 auto; padding: 0 var(--s3); }
+  .col-list { overscroll-behavior: contain; }
+  .col-bar { padding-bottom: calc(var(--s3) + env(safe-area-inset-bottom)); }
+  .col-bar > div { flex: 1 1 0; }
+  .col-bar .btn { flex-shrink: 0; }
+  .record-foot { padding-bottom: calc(var(--s3) + env(safe-area-inset-bottom)); }
+
+  .map-corner { display: flex; flex-wrap: wrap; align-items: flex-end; max-width: 190px; }
+  .map-key-toggle { display: inline-flex; }
+  .map-key { display: none; }
+  .map-key[data-open] { display: block; order: -1; flex: 1 1 100%; }
+  .map-notice { left: var(--s4) !important; right: var(--s4) !important; transform: none !important; max-width: none; flex-wrap: wrap; }
+
+  .undo-toast {
+    top: calc(var(--console-header-h) + env(safe-area-inset-top) + var(--s3));
+    left: var(--s3);
+    right: var(--s3);
+    bottom: auto;
+  }
+  .undo-toast p { min-width: 0; }
+
+  .sheet-scrim { padding: 0; place-items: end stretch; }
+  .sheet { width: 100%; max-height: 100dvh; border-radius: var(--r-lg) var(--r-lg) 0 0; }
+  .sheet-body { overscroll-behavior: contain; padding: var(--s4); }
+  .sheet-foot {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: var(--s3) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom));
+  }
+  .sheet-foot .btn:only-child { grid-column: 1 / -1; }
+}
+
+/* Landscape phone: back to two columns, the panel full height beside the map.
+   The metrics strip stays hidden: at 300px wide it wraps onto four lines. */
+@media (max-width: 1023px) and (max-height: 520px) {
+  .console-frame { grid-template-rows: calc(var(--console-header-h) + env(safe-area-inset-top)) minmax(0, 1fr); }
+  .console-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 42%); }
+  .console-aside[data-panel] { height: auto; border-top: 0; border-left: 1px solid var(--rule); }
+  .console-aside[data-panel="map"] :is(.col-chips, .col-list) { display: flex; }
+  .console-aside[data-panel="map"] .col-list { display: block; }
+  .panel-handle { display: none; }
+}
